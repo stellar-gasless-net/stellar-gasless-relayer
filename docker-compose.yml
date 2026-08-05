@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  relayer:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - HORIZON_URL=https://horizon-testnet.stellar.org
+      - NETWORK_PASSPHRASE=Test SDF Network ; September 2015
+      - RELAYER_SECRETS=SDXXX1...KEY1,SDYYY2...KEY2
+    restart: always
