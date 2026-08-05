@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { FeeBumpRelayer } from './relayer/fee_bump';
+import { rateLimitMiddleware } from './middleware/rate_limit';
+import { telemetry } from './telemetry/metrics';
 
 dotenv.config();
 
@@ -12,15 +14,22 @@ app.use(express.json());
 const PORT = process.env.PORT || 3001;
 const HORIZON_URL = process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015';
-const RELAYER_SECRET = process.env.RELAYER_SECRET || 'SDXXX...RELAYER_KEY'; // Demo secret
+const RELAYER_SECRET = process.env.RELAYER_SECRET || 'SDXXX...RELAYER_KEY';
 
 const relayer = new FeeBumpRelayer(RELAYER_SECRET, HORIZON_URL, NETWORK_PASSPHRASE);
 
+// Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'stellar-gasless-relayer', version: '1.0.0' });
 });
 
-app.post('/v1/relay', async (req: Request, res: Response) => {
+// Telemetry metrics endpoint
+app.get('/metrics', (req: Request, res: Response) => {
+  res.json(telemetry.getMetrics());
+});
+
+// Main Gasless Relay Endpoint
+app.post('/v1/relay', rateLimitMiddleware, async (req: Request, res: Response) => {
   try {
     const { innerTransactionXdr, dappApiKey } = req.body;
     if (!innerTransactionXdr) {
@@ -28,9 +37,19 @@ app.post('/v1/relay', async (req: Request, res: Response) => {
     }
 
     const txResult = await relayer.relayTransaction({ innerTransactionXdr, dappApiKey });
-    return res.json({ success: true, hash: txResult.hash, resultXdr: txResult.result_xdr });
+    telemetry.recordSuccess(100);
+
+    return res.json({
+      success: true,
+      hash: txResult.hash,
+      resultXdr: txResult.result_xdr,
+    });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message || 'Relay transaction submission failed' });
+    telemetry.recordFailure();
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Relay transaction submission failed',
+    });
   }
 });
 
