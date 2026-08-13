@@ -1,4 +1,4 @@
-# ⚡ Stellar Gasless Relayer Service (`stellar-gasless-relayer`)
+# Stellar Gasless Relayer Service (`stellar-gasless-relayer`)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
@@ -12,7 +12,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 
 ---
 
-## 🏛️ Relayer Engine Architecture & Flow
+## Relayer Engine Architecture & Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -46,7 +46,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 
 ---
 
-## 🛠️ Detailed Component Capabilities
+## Detailed Component Capabilities
 
 ### 1. Multi-Keypair Queue Manager (`src/relayer/queue.ts`)
 * **Race Condition Prevention**: Rotates sponsoring keypairs from a secret pool (`GCRELAY_POOL_KEY_1`, `GCRELAY_POOL_KEY_2`) to prevent sequence number collisions during transaction bursts.
@@ -62,7 +62,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 
 ---
 
-## ⚙️ Environment Configuration Matrix
+## Environment Configuration Matrix
 
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
@@ -73,20 +73,20 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 
 ---
 
-## 🤝 Contributing & `CONTRIBUTING.md` Guidelines
+## Contributing & `CONTRIBUTING.md` Guidelines
 
 Please review our dedicated **[`CONTRIBUTING.md`](./CONTRIBUTING.md)** guide before opening pull requests:
-* 📖 **[Backend Relayer Contributor Guide](./CONTRIBUTING.md)**
-* 🛡️ **[Security Disclosure Policy](./SECURITY.md)**
+* **[Backend Relayer Contributor Guide](./CONTRIBUTING.md)**
+* **[Security Disclosure Policy](./SECURITY.md)**
 
-### 📌 Pull Request Checklist:
+### Pull Request Checklist:
 - [ ] Claim an issue tagged `good first issue`, `intermediate`, or `advanced`.
 - [ ] Run `npm test` and ensure all TypeScript files compile cleanly (`npm run build`).
 - [ ] Follow Conventional Commits format (`feat: ...`, `fix: ...`, `docs: ...`).
 
 ---
 
-## 🔮 Future Improvements & Relayer Roadmap
+## Future Improvements & Relayer Roadmap
 
 - [ ] **Decentralized Bundler Node Network**: Peer-to-peer relayer node network incentivized via fee splits.
 - [ ] **Redis Distributed Queue Manager**: Redis-backed queue manager supporting horizontal scaling across cloud instances.
