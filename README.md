@@ -6,7 +6,9 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](./LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](./CONTRIBUTING.md)
 
-**High-throughput, enterprise TypeScript Relayer Engine managing multi-keypair pool rotation, Soroban RPC simulation, native fee-bump transaction wrapping, and Prometheus telemetry metrics.**
+**TypeScript relayer service: takes a signed inner Stellar transaction, wraps it in a `FeeBumpTransaction` sponsored by a rotating pool of keypairs, pre-flight simulates it via Soroban RPC, and submits it.**
+
+**Current status:** this is a working Express service you can run yourself (`npm run dev`), with real unit tests (`npm test`) and CI. It is **not deployed anywhere public** — no hosted URL exists yet.
 
 This repository houses the **Backend Infrastructure & Transaction Submitter Engine** for the [`stellar-gasless-net`](https://github.com/stellar-gasless-net) ecosystem.
 
@@ -49,16 +51,17 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 ## Detailed Component Capabilities
 
 ### 1. Multi-Keypair Queue Manager (`src/relayer/queue.ts`)
-* **Race Condition Prevention**: Rotates sponsoring keypairs from a secret pool (`GCRELAY_POOL_KEY_1`, `GCRELAY_POOL_KEY_2`) to prevent sequence number collisions during transaction bursts.
+* **Race Condition Prevention**: Rotates sponsoring keypairs from `RELAYER_SECRETS` on every `/v1/relay` call, so bursts of requests don't collide on the same account's sequence number. Fails fast at startup (not silently) if no valid secrets are configured.
 
 ### 2. Soroban RPC Simulator (`src/relayer/simulation.ts`)
-* **Pre-Flight Dry Run**: Executes dry runs against Horizon RPC (`https://horizon-testnet.stellar.org`) to verify transaction validity and estimate Stroops gas cost before broadcasting.
+* **Pre-Flight Dry Run**: Calls Soroban RPC's `simulateTransaction` method (a separate service from Horizon — see `SOROBAN_RPC_URL` below) to get real resource-cost estimates and reject failing invocations *before* the relayer spends a fee sponsoring them. Runs on every `/v1/relay` request.
 
 ### 3. FeeBump Builder (`src/relayer/fee_bump.ts`)
-* **Stellar Fee Sponsorship**: Constructs native `FeeBumpTransaction` instances, wrapping inner signed user payloads and signing as Fee Sponsor.
+* **Stellar Fee Sponsorship**: Constructs native `FeeBumpTransaction` instances, wrapping inner signed user payloads and signing as Fee Sponsor with whichever keypair the queue hands it.
 
-### 4. Prometheus Telemetry (`src/telemetry/metrics.ts`)
-* **Metrics Exporter**: Exposes `/metrics` endpoint recording total relayed transactions, XLM Stroops spent, active queue length, and server uptime.
+### 4. Telemetry (`src/telemetry/metrics.ts`)
+* **`/metrics`**: real Prometheus text exposition format — relayed/failed counters, stroops spent, uptime.
+* **`/metrics.json`**: the same counters as JSON, for tooling that doesn't want to parse Prometheus text.
 
 ---
 
@@ -66,10 +69,12 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
-| `PORT` | Relayer API HTTP listening port | `3000` |
-| `SOROBAN_RPC_URL` | Stellar / Soroban Horizon RPC node URL | `https://horizon-testnet.stellar.org` |
+| `PORT` | Relayer API HTTP listening port | `3001` |
+| `HORIZON_URL` | Horizon node URL — classic ledger data & transaction submission | `https://horizon-testnet.stellar.org` |
+| `SOROBAN_RPC_URL` | Soroban RPC node URL — a *separate* service from Horizon, used only for `simulateTransaction` | `https://soroban-testnet.stellar.org` |
 | `NETWORK_PASSPHRASE` | Stellar Network Passphrase | `Test SDF Network ; September 2015` |
-| `SPONSOR_SECRET_KEYS` | Comma-separated secret keys for keypair pool | `SD...1,SD...2` |
+| `RELAYER_SECRETS` | Comma-separated Stellar secret keys for the sponsoring keypair pool. Required — the service refuses to start without at least one valid key. | `SD...1,SD...2` |
+| `MAX_FEE_STROOPS` | Max fee the relayer will bid per fee-bump, in stroops | `1000000` |
 
 ---
 
@@ -81,13 +86,15 @@ Please review our dedicated **[`CONTRIBUTING.md`](./CONTRIBUTING.md)** guide bef
 
 ### Pull Request Checklist:
 - [ ] Claim an issue tagged `good first issue`, `intermediate`, or `advanced`.
-- [ ] Run `npm test` and ensure all TypeScript files compile cleanly (`npm run build`).
+- [ ] Run `npm test` (vitest) and ensure all TypeScript files compile cleanly (`npm run build`).
 - [ ] Follow Conventional Commits format (`feat: ...`, `fix: ...`, `docs: ...`).
 
 ---
 
 ## Future Improvements & Relayer Roadmap
 
+- [ ] **Deploy a public instance**: nothing is hosted yet — this only runs locally/self-hosted today.
+- [ ] **API key issuance & auth**: `/v1/relay` currently accepts `dappApiKey` in the body but doesn't validate it against anything real yet.
 - [ ] **Decentralized Bundler Node Network**: Peer-to-peer relayer node network incentivized via fee splits.
 - [ ] **Redis Distributed Queue Manager**: Redis-backed queue manager supporting horizontal scaling across cloud instances.
 - [ ] **WebHook Event Notifications**: WebHook dispatch engine notifying dApps upon transaction confirmation.

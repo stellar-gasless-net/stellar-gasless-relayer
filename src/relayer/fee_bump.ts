@@ -1,4 +1,4 @@
-import { Keypair, TransactionBuilder, Transaction, FeeBumpTransaction, Horizon } from '@stellar/stellar-sdk';
+import { Keypair, TransactionBuilder, Transaction, Horizon } from '@stellar/stellar-sdk';
 
 export interface RelayRequest {
   innerTransactionXdr: string;
@@ -7,42 +7,35 @@ export interface RelayRequest {
 }
 
 export class FeeBumpRelayer {
-  private relayerKeypair: Keypair;
   private server: Horizon.Server;
   private networkPassphrase: string;
+  private maxFeeStroops: string;
 
-  constructor(relayerSecret: string, horizonUrl: string, networkPassphrase: string) {
-    try {
-      this.relayerKeypair = Keypair.fromSecret(relayerSecret);
-    } catch (err) {
-      // Fallback to random valid keypair if secret is missing or placeholder
-      this.relayerKeypair = Keypair.random();
-    }
+  constructor(horizonUrl: string, networkPassphrase: string, maxFeeStroops: string) {
     this.server = new Horizon.Server(horizonUrl);
     this.networkPassphrase = networkPassphrase;
-  }
-
-  public getPublicKey(): string {
-    return this.relayerKeypair.publicKey();
+    this.maxFeeStroops = maxFeeStroops;
   }
 
   /**
-   * Wrap signed inner user transaction into a Stellar FeeBumpTransaction and submit to network
+   * Wrap a signed inner user transaction into a Stellar FeeBumpTransaction, sign it with
+   * the given sponsoring keypair, and submit it to the network.
+   *
+   * The sponsoring keypair is supplied per-call (rather than fixed at construction) so callers
+   * can rotate through a KeypairPoolQueue and avoid sequence-number collisions under load.
    */
-  async relayTransaction(request: RelayRequest): Promise<Horizon.ServerApi.TransactionRecord | any> {
+  async relayTransaction(request: RelayRequest, sponsorKeypair: Keypair): Promise<Horizon.HorizonApi.SubmitTransactionResponse> {
     const innerTx = TransactionBuilder.fromXDR(request.innerTransactionXdr, this.networkPassphrase) as Transaction;
-    
-    // Construct fee bump transaction sponsored by relayer keypair
+
     const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
-      this.relayerKeypair,
-      '1000000', // Maximum fee willing to pay in stroops
+      sponsorKeypair,
+      this.maxFeeStroops,
       innerTx,
       this.networkPassphrase
     );
 
-    feeBumpTx.sign(this.relayerKeypair);
+    feeBumpTx.sign(sponsorKeypair);
 
-    // Submit transaction to Horizon / RPC node
     return await this.server.submitTransaction(feeBumpTx);
   }
 }

@@ -1,13 +1,19 @@
-import { Horizon, TransactionBuilder, Transaction } from '@stellar/stellar-sdk';
-
 export interface SimulationResult {
   isSuccess: boolean;
-  minFee: string;
+  minResourceFeeStroops?: string;
   cpuInstructions?: number;
   memoryBytes?: number;
   error?: string;
 }
 
+/**
+ * Calls the Soroban RPC `simulateTransaction` JSON-RPC method to get a real
+ * pre-flight resource/fee estimate and catch failing invocations before the
+ * relayer spends anything sponsoring them.
+ *
+ * This talks to Soroban RPC, not Horizon — they're different services. See
+ * https://developers.stellar.org/docs/data/rpc/api-reference/methods/simulateTransaction
+ */
 export class SorobanSimulator {
   private rpcUrl: string;
 
@@ -15,25 +21,47 @@ export class SorobanSimulator {
     this.rpcUrl = rpcUrl;
   }
 
-  /**
-   * Pre-flight simulation dry-run to verify transaction execution before sponsoring native fee-bump
-   */
-  async simulateTransaction(innerTxXdr: string, networkPassphrase: string): Promise<SimulationResult> {
+  async simulateTransaction(innerTxXdr: string): Promise<SimulationResult> {
     try {
-      const tx = TransactionBuilder.fromXDR(innerTxXdr, networkPassphrase) as Transaction;
-      
-      // Simulate resource usage
+      const response = await fetch(this.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'simulateTransaction',
+          params: { transaction: innerTxXdr },
+        }),
+      });
+
+      const body = await response.json();
+
+      if (body.error) {
+        return {
+          isSuccess: false,
+          error: body.error.message || 'Soroban RPC returned an error',
+        };
+      }
+
+      const result = body.result;
+      if (!result) {
+        return { isSuccess: false, error: 'Soroban RPC returned no result' };
+      }
+
+      if (result.error) {
+        return { isSuccess: false, error: String(result.error) };
+      }
+
       return {
         isSuccess: true,
-        minFee: '100000',
-        cpuInstructions: 1450000,
-        memoryBytes: 320000,
+        minResourceFeeStroops: result.minResourceFee,
+        cpuInstructions: result.cost ? Number(result.cost.cpuInsns) : undefined,
+        memoryBytes: result.cost ? Number(result.cost.memBytes) : undefined,
       };
     } catch (err: any) {
       return {
         isSuccess: false,
-        minFee: '0',
-        error: err.message || 'Simulation execution failed',
+        error: err.message || 'Soroban RPC simulation request failed',
       };
     }
   }

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { loadConfig } from '../config';
 
 interface UsageQuota {
   count: number;
@@ -6,8 +7,9 @@ interface UsageQuota {
 }
 
 const usageStore = new Map<string, UsageQuota>();
-const WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 30; // Max 30 gasless txs per minute per IP/API-Key
+const config = loadConfig();
+const WINDOW_MS = config.rateLimitWindowMs;
+const MAX_REQUESTS = config.rateLimitMaxRequests;
 
 export function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
   const apiKey = (req.headers['x-api-key'] as string) || req.ip || 'anonymous';
@@ -27,7 +29,7 @@ export function rateLimitMiddleware(req: Request, res: Response, next: NextFunct
   if (record.count > MAX_REQUESTS) {
     return res.status(429).json({
       error: 'Rate limit exceeded',
-      message: `Maximum ${MAX_REQUESTS} gasless requests per minute exceeded.`,
+      message: `Maximum ${MAX_REQUESTS} gasless requests per ${WINDOW_MS / 1000}s exceeded.`,
       resetInSeconds: Math.ceil((record.resetTime - now) / 1000),
     });
   }

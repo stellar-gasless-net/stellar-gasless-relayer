@@ -12,8 +12,8 @@ export class RelayerLogger {
   }
 
   static logTransactionSuccess(txHash: string, network: string = 'testnet') {
-    const explorerUrl = `https://stellar_expert.com/explorer/${network}/tx/${txHash}`;
-    console.log(`[SUCCESS] ⚡ FeeBump Transaction Broadcast Success!`);
-    console.log(`[EXPLORER] 🔗 ${explorerUrl}`);
+    const explorerUrl = `https://stellar.expert/explorer/${network}/tx/${txHash}`;
+    console.log(`[SUCCESS] FeeBump transaction broadcast: ${txHash}`);
+    console.log(`[EXPLORER] ${explorerUrl}`);
   }
 }

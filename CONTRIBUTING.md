@@ -72,10 +72,10 @@ src/
 │   ├── rate_limit.ts      # Sliding-window IP rate limiter & API Key validator
 │   └── logger.ts          # Structured logger with StellarExpert link generator
 ├── telemetry/
-│   └── metrics.ts         # Prometheus metrics collector (/metrics)
+│   └── metrics.ts         # Prometheus metrics collector (/metrics, real exposition format)
 ├── types/
 │   └── index.ts           # TypeScript interfaces for API payloads
-├── config.ts              # Zod environment variable validator
+├── config.ts              # Environment variable loader (plain process.env, no schema validation yet)
 └── index.ts               # Express API Server entry point
 ```
 
@@ -110,12 +110,14 @@ curl -X POST http://localhost:3001/v1/relay \
 Run tests and ensure TypeScript compilation succeeds cleanly:
 
 ```bash
-# 1. Run unit tests
+# 1. Run unit tests (vitest)
 npm test
 
 # 2. Verify TypeScript build compilation
 npm run build
 ```
+
+CI runs both of these on every push and PR — see `.github/workflows/ci.yml`.
 
 ---
 
