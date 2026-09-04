@@ -10,6 +10,8 @@
 
 **Current status:** this is a working Express service you can run yourself (`npm run dev`), with real unit tests (`npm test`) and CI. It is **not deployed anywhere public** — no hosted URL exists yet.
 
+**Real, independently-verified end-to-end proof (2026-09-04):** run locally against a real funded `RELAYER_SECRETS` keypair, this service was proven to actually sponsor a real transaction end-to-end for the first time — see [`stellar-gasless-sdk`'s `examples/e2e-gasless-relay.mjs`](https://github.com/stellar-gasless-net/stellar-gasless-sdk/blob/main/examples/e2e-gasless-relay.mjs), which drives this relayer with the real SDK client against a real deployed contract. Confirmed independently via Horizon's own transaction record (not just this service's own success response): the configured sponsor's account was the transaction's real `fee_account` and lost the real network fee, while the calling user's account balance never moved. This same test caught and fixed a real bug here: `/v1/relay`'s error handling was surfacing Horizon's generic axios message (`"Request failed with status code 400"`) instead of the actual `result_codes` (e.g. `tx_bad_auth`, `tx_too_late`) that explain what actually went wrong — fixed in `src/index.ts`'s catch handler to extract `error.response?.data?.extras?.result_codes` when present.
+
 This repository houses the **Backend Infrastructure & Transaction Submitter Engine** for the [`stellar-gasless-net`](https://github.com/stellar-gasless-net) ecosystem.
 
 ---

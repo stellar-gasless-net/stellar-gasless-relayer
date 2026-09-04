@@ -87,10 +87,16 @@ app.post('/v1/relay', rateLimitMiddleware, async (req: Request, res: Response) =
     });
   } catch (error: any) {
     telemetry.recordFailure();
-    RelayerLogger.error('Relay transaction submission failed', { message: error.message });
+    // Horizon's own SDK throws an axios error whose generic `.message` (e.g. "Request
+    // failed with status code 400") hides the actual reason — the real cause lives in
+    // `error.response.data.extras.result_codes`. Surface that when present so SDK users
+    // aren't left debugging a meaningless HTTP status code.
+    const resultCodes = error.response?.data?.extras?.result_codes;
+    const detail = resultCodes ? JSON.stringify(resultCodes) : error.message;
+    RelayerLogger.error('Relay transaction submission failed', { message: detail });
     return res.status(500).json({
       success: false,
-      error: error.message || 'Relay transaction submission failed',
+      error: detail || 'Relay transaction submission failed',
     });
   }
 });
