@@ -1,5 +1,6 @@
 # Stellar Gasless Relayer Service (`stellar-gasless-relayer`)
 
+[![CI](https://github.com/stellar-gasless-net/stellar-gasless-relayer/actions/workflows/ci.yml/badge.svg)](https://github.com/stellar-gasless-net/stellar-gasless-relayer/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Express.js](https://img.shields.io/badge/Express.js-4.19-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com/)
