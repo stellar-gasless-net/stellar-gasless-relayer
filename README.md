@@ -16,6 +16,13 @@
 
 This repository houses the **Backend Infrastructure & Transaction Submitter Engine** for the [`stellar-gasless-net`](https://github.com/stellar-gasless-net) ecosystem.
 
+## Why this is a real relayer, not a mockup
+
+- **Independently verified via Horizon, not trusted from its own success response.** The end-to-end proof above checked the sponsor account's real balance drop and the user account's real (unchanged) balance directly against Horizon's transaction record.
+- **Real API-key auth and per-key rate limiting**, not a documented-but-unenforced field — an unkeyed or wrong-keyed request gets a real 401 before it can even reach simulation.
+- **A real `.env` bug found by actually running the service**, not just passing unit tests. Rate limits and API keys were silently never read from `.env` due to an ES-module import-order issue — unit tests never caught it because they set `process.env` directly. Fixed and re-verified live.
+- **Fails loud, not silent.** No `RELAYER_SECRETS` or `DAPP_API_KEYS` configured means the service refuses to start at all, rather than quietly sponsoring nothing or accepting anyone.
+
 ---
 
 ## Relayer Engine Architecture & Flow
@@ -88,6 +95,15 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 | `RATE_LIMIT_WINDOW_MS` | Fixed rate-limit window length, in milliseconds, keyed per caller API key | `60000` |
 | `RATE_LIMIT_MAX_REQUESTS` | Max requests a single API key can make within one rate-limit window | `30` |
 | `DAPP_API_KEYS` | Comma-separated keys you issue to integrating dApps. Required — the service refuses to start with an empty allowlist. | `st_gas_live_abc,st_gas_live_def` |
+
+---
+
+## Ecosystem
+
+Part of **stellar-gasless-net**'s gasless meta-transaction protocol suite, alongside:
+- [`soroban-gasless-contracts`](https://github.com/stellar-gasless-net/soroban-gasless-contracts) — the on-chain WASM contracts (trusted forwarder, paymasters, smart account wallet)
+- [`stellar-gasless-sdk`](https://github.com/stellar-gasless-net/stellar-gasless-sdk) — the TypeScript client SDK that talks to this relayer
+- [`gasless-relayer-dashboard`](https://github.com/stellar-gasless-net/gasless-relayer-dashboard) — an admin console that can point at a locally-running instance of this service
 
 ---
 
