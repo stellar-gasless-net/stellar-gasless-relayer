@@ -3,6 +3,15 @@
   "version": "1.0.0",
   "description": "Relayer engine and FeeBumpTransaction submitter for gasless Stellar & Soroban transactions",
   "main": "dist/index.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stellar-gasless-net/stellar-gasless-relayer.git"
+  },
+  "homepage": "https://github.com/stellar-gasless-net/stellar-gasless-relayer#readme",
+  "bugs": {
+    "url": "https://github.com/stellar-gasless-net/stellar-gasless-relayer/issues"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
