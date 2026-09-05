@@ -126,7 +126,7 @@ CI runs both of these on every push and PR — see `.github/workflows/ci.yml`.
 We enforce **Conventional Commits**:
 - `feat: implement multi-keypair sequence lock in queue manager`
 - `fix: correct rate limiter window calculation`
-- `test: add Jest mock tests for horizon submission failure`
+- `test: add vitest mock tests for horizon submission failure`
 - `docs: update OpenAPI specification table`
 
 Thank you for contributing to **Stellar Gasless Relayer Service**! ⚡
