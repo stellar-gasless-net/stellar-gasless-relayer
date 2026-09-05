@@ -1,7 +1,7 @@
 {
   "name": "@stellar-gasless/relayer-service",
   "version": "1.0.0",
-  "description": "High-throughput Relayer Engine & FeeBumpTransaction submitter for Stellar & Soroban",
+  "description": "Relayer engine and FeeBumpTransaction submitter for gasless Stellar & Soroban transactions",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

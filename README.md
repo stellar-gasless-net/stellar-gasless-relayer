@@ -23,8 +23,8 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 │                      stellar-gasless-relayer Service                            │
 │                                                                                 │
 │  ┌───────────────────────────┐                 ┌─────────────────────────────┐  │
-│  │   REST API (/v1/relay)    │                 │   Rate Limiter & API Keys   │  │
-│  │ (Receives Client Intents) │────────────────►│   (Sliding Window Limits)   │  │
+│  │   REST API (/v1/relay)    │                 │      IP Rate Limiter        │  │
+│  │ (Receives Client Intents) │────────────────►│    (Fixed Window Limits)    │  │
 │  └─────────────┬─────────────┘                 └──────────────┬──────────────┘  │
 │                │                                              │                 │
 │                v                                              v                 │
@@ -77,6 +77,8 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 | `NETWORK_PASSPHRASE` | Stellar Network Passphrase | `Test SDF Network ; September 2015` |
 | `RELAYER_SECRETS` | Comma-separated Stellar secret keys for the sponsoring keypair pool. Required — the service refuses to start without at least one valid key. | `SD...1,SD...2` |
 | `MAX_FEE_STROOPS` | Max fee the relayer will bid per fee-bump, in stroops | `1000000` |
+| `RATE_LIMIT_WINDOW_MS` | Fixed rate-limit window length, in milliseconds, keyed per caller IP | `60000` |
+| `RATE_LIMIT_MAX_REQUESTS` | Max requests a single IP can make within one rate-limit window | `30` |
 
 ---
 

@@ -69,7 +69,7 @@ src/
 │   ├── queue.ts           # Multi-keypair account pool rotation queue
 │   └── simulation.ts     # Soroban RPC pre-flight dry-run simulator
 ├── middleware/
-│   ├── rate_limit.ts      # Sliding-window IP rate limiter & API Key validator
+│   ├── rate_limit.ts      # Fixed-window IP rate limiter (API keys accepted but not yet validated — see README roadmap)
 │   └── logger.ts          # Structured logger with StellarExpert link generator
 ├── telemetry/
 │   └── metrics.ts         # Prometheus metrics collector (/metrics, real exposition format)
@@ -127,6 +127,6 @@ We enforce **Conventional Commits**:
 - `feat: implement multi-keypair sequence lock in queue manager`
 - `fix: correct rate limiter window calculation`
 - `test: add vitest mock tests for horizon submission failure`
-- `docs: update OpenAPI specification table`
+- `docs: update environment configuration matrix`
 
 Thank you for contributing to **Stellar Gasless Relayer Service**! ⚡
