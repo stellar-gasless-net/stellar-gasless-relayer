@@ -16,7 +16,8 @@
     "express": "^4.19.2"
   },
   "overrides": {
-    "toml": "^5.0.0"
+    "toml": "^5.0.0",
+    "qs": "^6.16.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
