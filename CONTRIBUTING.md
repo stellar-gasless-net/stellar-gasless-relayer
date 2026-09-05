@@ -69,7 +69,8 @@ src/
 │   ├── queue.ts           # Multi-keypair account pool rotation queue
 │   └── simulation.ts     # Soroban RPC pre-flight dry-run simulator
 ├── middleware/
-│   ├── rate_limit.ts      # Fixed-window IP rate limiter (API keys accepted but not yet validated — see README roadmap)
+│   ├── api_key.ts         # Validates X-API-Key / dappApiKey against operator-configured DAPP_API_KEYS
+│   ├── rate_limit.ts      # Fixed-window rate limiter, keyed per (now-validated) API key
 │   └── logger.ts          # Structured logger with StellarExpert link generator
 ├── telemetry/
 │   └── metrics.ts         # Prometheus metrics collector (/metrics, real exposition format)

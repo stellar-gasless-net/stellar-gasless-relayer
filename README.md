@@ -12,6 +12,8 @@
 
 **Real, independently-verified end-to-end proof (2026-09-04):** run locally against a real funded `RELAYER_SECRETS` keypair, this service was proven to actually sponsor a real transaction end-to-end for the first time — see [`stellar-gasless-sdk`'s `examples/e2e-gasless-relay.mjs`](https://github.com/stellar-gasless-net/stellar-gasless-sdk/blob/main/examples/e2e-gasless-relay.mjs), which drives this relayer with the real SDK client against a real deployed contract. Confirmed independently via Horizon's own transaction record (not just this service's own success response): the configured sponsor's account was the transaction's real `fee_account` and lost the real network fee, while the calling user's account balance never moved. This same test caught and fixed a real bug here: `/v1/relay`'s error handling was surfacing Horizon's generic axios message (`"Request failed with status code 400"`) instead of the actual `result_codes` (e.g. `tx_bad_auth`, `tx_too_late`) that explain what actually went wrong — fixed in `src/index.ts`'s catch handler to extract `error.response?.data?.extras?.result_codes` when present.
 
+**API key validation is now real (2026-09-05).** `/v1/relay` previously accepted `dappApiKey` but never checked it against anything — any caller could hit the endpoint with no key at all. `src/middleware/api_key.ts` now rejects with 401 unless the caller's `X-API-Key` header (or `dappApiKey` body field) matches one of the operator-configured `DAPP_API_KEYS`. Verified against a real running instance, not just unit tests: an unkeyed request gets a real 401, a wrong key gets a real 401, and a valid key correctly reaches simulation. Building this surfaced a real, separate bug: `RATE_LIMIT_WINDOW_MS`/`RATE_LIMIT_MAX_REQUESTS` (and now `DAPP_API_KEYS`) were silently never read from `.env` in a real run — `rate_limit.ts` and `api_key.ts` each call `loadConfig()` at their own module's top level, which (per ES module evaluation order) runs *during* their `import` statements in `index.ts`, before that file's own `dotenv.config()` call further down ever executed. Unit tests never caught this because they set `process.env` directly. Fixed by importing the side-effecting `dotenv/config` entry point as the very first line of `index.ts` instead.
+
 This repository houses the **Backend Infrastructure & Transaction Submitter Engine** for the [`stellar-gasless-net`](https://github.com/stellar-gasless-net) ecosystem.
 
 ---
@@ -23,8 +25,8 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 │                      stellar-gasless-relayer Service                            │
 │                                                                                 │
 │  ┌───────────────────────────┐                 ┌─────────────────────────────┐  │
-│  │   REST API (/v1/relay)    │                 │      IP Rate Limiter        │  │
-│  │ (Receives Client Intents) │────────────────►│    (Fixed Window Limits)    │  │
+│  │   REST API (/v1/relay)    │                 │   API Key Auth + Rate Limit │  │
+│  │ (Receives Client Intents) │────────────────►│ (Real Keys, Fixed Window)   │  │
 │  └─────────────┬─────────────┘                 └──────────────┬──────────────┘  │
 │                │                                              │                 │
 │                v                                              v                 │
@@ -65,6 +67,12 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 * **`/metrics`**: real Prometheus text exposition format — relayed/failed counters, stroops spent, uptime.
 * **`/metrics.json`**: the same counters as JSON, for tooling that doesn't want to parse Prometheus text.
 
+### 5. API Key Auth (`src/middleware/api_key.ts`)
+* **Real Validation**: Rejects with 401 unless the caller's `X-API-Key` header (or `dappApiKey` body field) matches one of the operator-configured `DAPP_API_KEYS`. Runs before rate limiting, so an unauthenticated caller can't spend any of the relayer's work budget.
+
+### 6. Rate Limiter (`src/middleware/rate_limit.ts`)
+* **Fixed Window, Per-API-Key**: Buckets by the (now-validated) API key rather than caller IP, so each integrating dApp gets its own independent quota instead of every caller behind one corporate NAT IP sharing one bucket.
+
 ---
 
 ## Environment Configuration Matrix
@@ -77,8 +85,9 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 | `NETWORK_PASSPHRASE` | Stellar Network Passphrase | `Test SDF Network ; September 2015` |
 | `RELAYER_SECRETS` | Comma-separated Stellar secret keys for the sponsoring keypair pool. Required — the service refuses to start without at least one valid key. | `SD...1,SD...2` |
 | `MAX_FEE_STROOPS` | Max fee the relayer will bid per fee-bump, in stroops | `1000000` |
-| `RATE_LIMIT_WINDOW_MS` | Fixed rate-limit window length, in milliseconds, keyed per caller IP | `60000` |
-| `RATE_LIMIT_MAX_REQUESTS` | Max requests a single IP can make within one rate-limit window | `30` |
+| `RATE_LIMIT_WINDOW_MS` | Fixed rate-limit window length, in milliseconds, keyed per caller API key | `60000` |
+| `RATE_LIMIT_MAX_REQUESTS` | Max requests a single API key can make within one rate-limit window | `30` |
+| `DAPP_API_KEYS` | Comma-separated keys you issue to integrating dApps. Required — the service refuses to start with an empty allowlist. | `st_gas_live_abc,st_gas_live_def` |
 
 ---
 
@@ -97,8 +106,9 @@ Please review our dedicated **[`CONTRIBUTING.md`](./CONTRIBUTING.md)** guide bef
 
 ## Future Improvements & Relayer Roadmap
 
+- [x] **API key issuance & auth**: done 2026-09-05 — `src/middleware/api_key.ts` validates against operator-configured `DAPP_API_KEYS`.
 - [ ] **Deploy a public instance**: nothing is hosted yet — this only runs locally/self-hosted today.
-- [ ] **API key issuance & auth**: `/v1/relay` currently accepts `dappApiKey` in the body but doesn't validate it against anything real yet.
+- [ ] **Key issuance API**: `DAPP_API_KEYS` is a static operator-configured list today — there's no self-serve way for a dApp to request its own key yet.
 - [ ] **Decentralized Bundler Node Network**: Peer-to-peer relayer node network incentivized via fee splits.
 - [ ] **Redis Distributed Queue Manager**: Redis-backed queue manager supporting horizontal scaling across cloud instances.
 - [ ] **WebHook Event Notifications**: WebHook dispatch engine notifying dApps upon transaction confirmation.

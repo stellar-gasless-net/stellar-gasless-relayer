@@ -7,10 +7,16 @@ export interface RelayerConfig {
   maxFeeStroops: string;
   rateLimitWindowMs: number;
   rateLimitMaxRequests: number;
+  dappApiKeys: string[];
 }
 
 export function loadConfig(): RelayerConfig {
   const relayerSecrets = (process.env.RELAYER_SECRETS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const dappApiKeys = (process.env.DAPP_API_KEYS || '')
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
@@ -27,5 +33,6 @@ export function loadConfig(): RelayerConfig {
     maxFeeStroops: process.env.MAX_FEE_STROOPS || '1000000',
     rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
     rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '30', 10),
+    dappApiKeys,
   };
 }

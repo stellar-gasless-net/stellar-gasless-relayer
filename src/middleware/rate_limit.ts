@@ -26,11 +26,15 @@ const sweepInterval = setInterval(() => {
 sweepInterval.unref();
 
 export function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
-  // dappApiKey/X-API-Key isn't validated against anything real yet (see README's roadmap),
-  // so keying the limiter by it first let any caller bypass the limit entirely by sending a
-  // fresh random key on every request. req.ip is the one signal here the caller can't choose
-  // for themselves, so it's the only trustworthy bucket key until real API key auth exists.
-  const apiKey = req.ip || 'anonymous';
+  // Bucketing by API key gives each dapp integrator its own independent quota instead of
+  // lumping every caller behind one corporate NAT IP together. Safe to key by it now that
+  // apiKeyMiddleware runs first on every route that uses this and rejects anything not in
+  // the configured DAPP_API_KEYS set — a caller can no longer bypass the limit by sending a
+  // fresh random key per request, since a fresh random key gets a 401 before reaching here.
+  // Falls back to req.ip only for callers that use this middleware without that gate in
+  // front of it.
+  const headerKey = req.headers['x-api-key'];
+  const apiKey = (Array.isArray(headerKey) ? headerKey[0] : headerKey) || req.body?.dappApiKey || req.ip || 'anonymous';
   const now = Date.now();
 
   const record = usageStore.get(apiKey) || { count: 0, resetTime: now + WINDOW_MS };

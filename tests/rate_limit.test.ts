@@ -42,8 +42,12 @@ describe('rateLimitMiddleware', () => {
     expect(blockedRes.status).toHaveBeenCalledWith(429);
   });
 
-  it('cannot be bypassed by sending a fresh x-api-key per request — bucketing is by IP only', async () => {
-    const middleware = await freshMiddleware(2, 60_000);
+  it('gives independent quotas per API key rather than lumping every key behind one IP', async () => {
+    // Safe to key by API key now that apiKeyMiddleware runs first on every route that uses
+    // this and rejects anything not in the configured DAPP_API_KEYS set — see that
+    // middleware's own tests for the "can't just send a fresh random key" coverage this
+    // module used to need when keys weren't validated yet.
+    const middleware = await freshMiddleware(1, 60_000);
     const next = vi.fn() as NextFunction;
 
     middleware(makeReq('5.6.7.8', 'key-one'), makeRes(), next);
@@ -51,7 +55,7 @@ describe('rateLimitMiddleware', () => {
     expect(next).toHaveBeenCalledTimes(2);
 
     const blockedRes = makeRes();
-    middleware(makeReq('5.6.7.8', 'a-brand-new-random-key'), blockedRes, next);
+    middleware(makeReq('5.6.7.8', 'key-one'), blockedRes, next);
     expect(next).toHaveBeenCalledTimes(2);
     expect(blockedRes.status).toHaveBeenCalledWith(429);
   });

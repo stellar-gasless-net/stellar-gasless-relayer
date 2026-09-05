@@ -1,15 +1,20 @@
+// Must be the very first import. ES module imports fully evaluate each imported module's
+// own top-level code, in order, before this file's body runs — so `rate_limit.ts` and
+// `api_key.ts` below both call loadConfig() at their own module top level, which happens
+// *during* their import statements, before a dotenv.config() call later in this file would
+// ever run. Importing the side-effecting 'dotenv/config' entry point first guarantees
+// process.env is populated from .env before anything else in this file is even parsed.
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { FeeBumpRelayer } from './relayer/fee_bump';
 import { KeypairPoolQueue } from './relayer/queue';
 import { SorobanSimulator } from './relayer/simulation';
+import { apiKeyMiddleware } from './middleware/api_key';
 import { rateLimitMiddleware } from './middleware/rate_limit';
 import { RelayerLogger } from './middleware/logger';
 import { telemetry } from './telemetry/metrics';
 import { loadConfig } from './config';
-
-dotenv.config();
 
 const config = loadConfig();
 
@@ -19,6 +24,16 @@ if (config.relayerSecrets.length === 0) {
     'keys (e.g. "SD...1,SD...2") in your environment before starting the relayer. ' +
     'Refusing to start with no sponsoring keypair rather than silently generating a ' +
     'throwaway one with a zero balance.'
+  );
+  process.exit(1);
+}
+
+if (config.dappApiKeys.length === 0) {
+  console.error(
+    'FATAL: no DAPP_API_KEYS configured. Set a comma-separated list of keys you issue to ' +
+    'integrating dApps (e.g. "st_gas_live_abc,st_gas_live_def") before starting the ' +
+    'relayer. Refusing to start with an empty allowlist rather than silently accepting ' +
+    'requests from anyone.'
   );
   process.exit(1);
 }
@@ -56,7 +71,7 @@ app.get('/metrics.json', (req: Request, res: Response) => {
 });
 
 // Main Gasless Relay Endpoint
-app.post('/v1/relay', rateLimitMiddleware, async (req: Request, res: Response) => {
+app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, async (req: Request, res: Response) => {
   try {
     const { innerTransactionXdr, dappApiKey, paymasterAddress } = req.body;
     if (!innerTransactionXdr) {
