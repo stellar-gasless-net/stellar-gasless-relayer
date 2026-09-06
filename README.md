@@ -116,7 +116,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 Part of **stellar-gasless-net**'s gasless meta-transaction protocol suite, alongside:
 - [`soroban-gasless-contracts`](https://github.com/stellar-gasless-net/soroban-gasless-contracts) — the on-chain WASM contracts (trusted forwarder, paymasters, smart account wallet)
 - [`stellar-gasless-sdk`](https://github.com/stellar-gasless-net/stellar-gasless-sdk) — the TypeScript client SDK that talks to this relayer
-- [`gasless-relayer-dashboard`](https://github.com/stellar-gasless-net/gasless-relayer-dashboard) — an admin console that can point at a locally-running instance of this service
+- [`gasless-relayer-dashboard`](https://github.com/stellar-gasless-net/gasless-relayer-dashboard) — an admin console that can point at a locally-running instance of this service ([live demo](https://gasless-relayer-dashboard.vercel.app/))
 
 ---
 
