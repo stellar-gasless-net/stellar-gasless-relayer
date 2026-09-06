@@ -23,6 +23,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 - **Real API-key auth and per-key rate limiting**, not a documented-but-unenforced field — an unkeyed or wrong-keyed request gets a real 401 before it can even reach simulation.
 - **A real `.env` bug found by actually running the service**, not just passing unit tests. Rate limits and API keys were silently never read from `.env` due to an ES-module import-order issue — unit tests never caught it because they set `process.env` directly. Fixed and re-verified live.
 - **Fails loud, not silent.** No `RELAYER_SECRETS` or `DAPP_API_KEYS` configured means the service refuses to start at all, rather than quietly sponsoring nothing or accepting anyone.
+- **A real daily spend budget, not just a request-count limit.** Rate limiting bounds how often a caller can hit the endpoint; it never bounded how much real XLM the sponsor could lose in a day. Optional global and per-API-key stroop budgets close that gap, verified live with a real `402` rejection once exhausted — not just asserted in a unit test.
 
 ---
 
@@ -72,7 +73,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 * **Stellar Fee Sponsorship**: Constructs native `FeeBumpTransaction` instances, wrapping inner signed user payloads and signing as Fee Sponsor with whichever keypair the queue hands it.
 
 ### 4. Telemetry (`src/telemetry/metrics.ts`)
-* **`/metrics`**: real Prometheus text exposition format — relayed/failed counters, stroops spent, uptime.
+* **`/metrics`**: real Prometheus text exposition format — relayed/failed counters, stroops spent, uptime. **Fixed 2026-09-06**: the stroops-spent counter was silently incrementing by a hardcoded placeholder (`100`) on every success, completely disconnected from the real fee bid — the `/metrics` endpoint's spend figures were never real numbers. Now records the actual `MAX_FEE_STROOPS` bid per relay.
 * **`/metrics.json`**: the same counters as JSON, for tooling that doesn't want to parse Prometheus text.
 
 ### 5. API Key Auth (`src/middleware/api_key.ts`)
@@ -80,6 +81,9 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 
 ### 6. Rate Limiter (`src/middleware/rate_limit.ts`)
 * **Fixed Window, Per-API-Key**: Buckets by the (now-validated) API key rather than caller IP, so each integrating dApp gets its own independent quota instead of every caller behind one corporate NAT IP sharing one bucket.
+
+### 7. Daily Sponsorship Spend Budget (`src/middleware/spend_budget.ts`)
+* **Real Budget Enforcement (2026-09-06)**: Optional global and per-API-key daily caps, in stroops, on how much the relayer will sponsor — rate limiting bounds *request count*, this bounds real XLM exposure. Checked against the fee-bump bid (Horizon's immediate submit response doesn't return the actual `fee_charged`, only a later fetch-by-hash does — using the bid is a deliberately conservative choice: it can only reserve more headroom than a transaction actually uses, never less). Only counts real, successful relays toward the budget — a failed or rejected attempt never consumes it. Rejects with `402` once exhausted, resetting at 00:00 UTC. Both caps default to `0` (unlimited), so a fresh setup isn't forced to configure one just to start.
 
 ---
 
@@ -96,6 +100,8 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 | `RATE_LIMIT_WINDOW_MS` | Fixed rate-limit window length, in milliseconds, keyed per caller API key | `60000` |
 | `RATE_LIMIT_MAX_REQUESTS` | Max requests a single API key can make within one rate-limit window | `30` |
 | `DAPP_API_KEYS` | Comma-separated keys you issue to integrating dApps. Required — the service refuses to start with an empty allowlist. | `st_gas_live_abc,st_gas_live_def` |
+| `GLOBAL_DAILY_BUDGET_STROOPS` | Max total stroops the relayer will sponsor across all callers per UTC day. Optional — `0` means unlimited. | `0` |
+| `PER_KEY_DAILY_BUDGET_STROOPS` | Max stroops a single API key can have sponsored per UTC day. Optional — `0` means unlimited. | `0` |
 
 ---
 

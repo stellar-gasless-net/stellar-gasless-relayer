@@ -8,6 +8,11 @@ export interface RelayerConfig {
   rateLimitWindowMs: number;
   rateLimitMaxRequests: number;
   dappApiKeys: string[];
+  /** 0 means unlimited — a global daily cap is a real safety net, not a required one; a
+   * fresh local/dev setup shouldn't be forced to configure one just to start. */
+  globalDailyBudgetStroops: number;
+  /** 0 means unlimited — same reasoning as globalDailyBudgetStroops, scoped per API key. */
+  perKeyDailyBudgetStroops: number;
 }
 
 export function loadConfig(): RelayerConfig {
@@ -34,5 +39,7 @@ export function loadConfig(): RelayerConfig {
     rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
     rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '30', 10),
     dappApiKeys,
+    globalDailyBudgetStroops: parseInt(process.env.GLOBAL_DAILY_BUDGET_STROOPS || '0', 10),
+    perKeyDailyBudgetStroops: parseInt(process.env.PER_KEY_DAILY_BUDGET_STROOPS || '0', 10),
   };
 }

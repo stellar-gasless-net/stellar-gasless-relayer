@@ -71,6 +71,7 @@ src/
 ├── middleware/
 │   ├── api_key.ts         # Validates X-API-Key / dappApiKey against operator-configured DAPP_API_KEYS
 │   ├── rate_limit.ts      # Fixed-window rate limiter, keyed per (now-validated) API key
+│   ├── spend_budget.ts    # Optional global/per-key daily stroop sponsorship caps
 │   └── logger.ts          # Structured logger with StellarExpert link generator
 ├── telemetry/
 │   └── metrics.ts         # Prometheus metrics collector (/metrics, real exposition format)

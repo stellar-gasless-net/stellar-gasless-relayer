@@ -12,6 +12,7 @@ import { KeypairPoolQueue } from './relayer/queue';
 import { SorobanSimulator } from './relayer/simulation';
 import { apiKeyMiddleware } from './middleware/api_key';
 import { rateLimitMiddleware } from './middleware/rate_limit';
+import { spendBudgetMiddleware, recordSpend } from './middleware/spend_budget';
 import { RelayerLogger } from './middleware/logger';
 import { telemetry } from './telemetry/metrics';
 import { loadConfig } from './config';
@@ -71,7 +72,7 @@ app.get('/metrics.json', (req: Request, res: Response) => {
 });
 
 // Main Gasless Relay Endpoint
-app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, async (req: Request, res: Response) => {
+app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, spendBudgetMiddleware, async (req: Request, res: Response) => {
   try {
     const { innerTransactionXdr, dappApiKey, paymasterAddress } = req.body;
     if (!innerTransactionXdr) {
@@ -92,7 +93,14 @@ app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, async (req: Request
       { innerTransactionXdr, dappApiKey, paymasterAddress },
       sponsorKeypair
     );
-    telemetry.recordSuccess(100);
+    // The real fee-bump bid — the actual fee_charged isn't in Horizon's immediate submit
+    // response (only a later fetch-by-hash returns it), so this is the same conservative
+    // figure spend_budget.ts checks against, not a placeholder.
+    const feeBidStroops = parseInt(config.maxFeeStroops, 10);
+    telemetry.recordSuccess(feeBidStroops);
+    const headerKey = req.headers['x-api-key'];
+    const apiKey = (Array.isArray(headerKey) ? headerKey[0] : headerKey) || dappApiKey || 'unknown';
+    recordSpend(apiKey, feeBidStroops);
     RelayerLogger.logTransactionSuccess(txResult.hash, config.networkPassphrase.includes('Public') ? 'public' : 'testnet');
 
     return res.json({
