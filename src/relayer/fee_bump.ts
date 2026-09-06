@@ -22,7 +22,10 @@ export class FeeBumpRelayer {
    * the given sponsoring keypair, and submit it to the network.
    *
    * The sponsoring keypair is supplied per-call (rather than fixed at construction) so callers
-   * can rotate through a KeypairPoolQueue and avoid sequence-number collisions under load.
+   * can rotate through a KeypairPoolQueue, spreading submission throughput and operational
+   * balance across several funded accounts instead of one — see KeypairPoolQueue's own doc
+   * comment for why this is NOT about sequence-number conflicts (a fee-bump's feeSource has
+   * no sequence number of its own).
    */
   async relayTransaction(request: RelayRequest, sponsorKeypair: Keypair): Promise<Horizon.HorizonApi.SubmitTransactionResponse> {
     const innerTx = TransactionBuilder.fromXDR(request.innerTransactionXdr, this.networkPassphrase) as Transaction;

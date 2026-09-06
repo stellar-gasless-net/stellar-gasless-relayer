@@ -12,7 +12,11 @@ export class KeypairPoolQueue {
   }
 
   /**
-   * Rotate and return the next keypair to sponsor fee-bump to avoid sequence number conflicts
+   * Rotate and return the next sponsor keypair. NOT about sequence-number conflicts — a
+   * fee-bump transaction's `feeSource` has no sequence number of its own (only the inner
+   * transaction's source account does, per CAP-15), so reusing one sponsor concurrently
+   * can't cause a sequence conflict either way. This spreads submission throughput and
+   * operational XLM balance across several funded accounts instead of one.
    */
   getNextKeypair(): Keypair {
     const keypair = this.keypairs[this.currentIndex];
