@@ -13,6 +13,9 @@ export interface RelayerConfig {
   globalDailyBudgetStroops: number;
   /** 0 means unlimited — same reasoning as globalDailyBudgetStroops, scoped per API key. */
   perKeyDailyBudgetStroops: number;
+  /** Empty means "allow any origin" (the same default Express's bare cors() has). Configuring
+   * this is what actually restricts which browser origins can call this relayer directly. */
+  corsOrigins: string[];
 }
 
 export function loadConfig(): RelayerConfig {
@@ -22,6 +25,11 @@ export function loadConfig(): RelayerConfig {
     .filter((s) => s.length > 0);
 
   const dappApiKeys = (process.env.DAPP_API_KEYS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const corsOrigins = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
@@ -41,5 +49,6 @@ export function loadConfig(): RelayerConfig {
     dappApiKeys,
     globalDailyBudgetStroops: parseInt(process.env.GLOBAL_DAILY_BUDGET_STROOPS || '0', 10),
     perKeyDailyBudgetStroops: parseInt(process.env.PER_KEY_DAILY_BUDGET_STROOPS || '0', 10),
+    corsOrigins,
   };
 }

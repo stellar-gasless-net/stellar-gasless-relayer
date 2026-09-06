@@ -13,6 +13,7 @@ import { SorobanSimulator } from './relayer/simulation';
 import { apiKeyMiddleware } from './middleware/api_key';
 import { rateLimitMiddleware } from './middleware/rate_limit';
 import { spendBudgetMiddleware, recordSpend } from './middleware/spend_budget';
+import { buildCorsOptions } from './cors_config';
 import { RelayerLogger } from './middleware/logger';
 import { telemetry } from './telemetry/metrics';
 import { loadConfig } from './config';
@@ -39,6 +40,16 @@ if (config.dappApiKeys.length === 0) {
   process.exit(1);
 }
 
+if (config.corsOrigins.length === 0) {
+  console.warn(
+    'WARNING: no CORS_ORIGINS configured — this relayer accepts direct browser requests ' +
+    'from ANY website, not just your own dashboard/dApp. Fine for local development; set ' +
+    'CORS_ORIGINS to a comma-separated allowlist (e.g. "https://your-dapp.example") before ' +
+    'a real deployment. Not a hard failure, since some deployments are server-to-server ' +
+    'only and never receive a browser Origin header at all.'
+  );
+}
+
 // Throws immediately (and loudly) on any malformed secret, instead of the relayer
 // silently falling back to a random keypair that can never actually pay fees.
 const keypairPool = new KeypairPoolQueue(config.relayerSecrets);
@@ -47,7 +58,7 @@ const relayer = new FeeBumpRelayer(config.horizonUrl, config.networkPassphrase, 
 const simulator = new SorobanSimulator(config.sorobanRpcUrl);
 
 const app = express();
-app.use(cors());
+app.use(cors(buildCorsOptions(config.corsOrigins)));
 app.use(express.json());
 
 // Health check endpoint

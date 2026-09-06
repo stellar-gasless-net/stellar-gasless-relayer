@@ -78,6 +78,7 @@ src/
 ├── types/
 │   └── index.ts           # TypeScript interfaces for API payloads
 ├── config.ts              # Environment variable loader (plain process.env, no schema validation yet)
+├── cors_config.ts         # Builds a real CORS origin allowlist from CORS_ORIGINS
 └── index.ts               # Express API Server entry point
 ```
 

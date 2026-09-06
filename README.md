@@ -24,6 +24,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 - **A real `.env` bug found by actually running the service**, not just passing unit tests. Rate limits and API keys were silently never read from `.env` due to an ES-module import-order issue — unit tests never caught it because they set `process.env` directly. Fixed and re-verified live.
 - **Fails loud, not silent.** No `RELAYER_SECRETS` or `DAPP_API_KEYS` configured means the service refuses to start at all, rather than quietly sponsoring nothing or accepting anyone.
 - **A real daily spend budget, not just a request-count limit.** Rate limiting bounds how often a caller can hit the endpoint; it never bounded how much real XLM the sponsor could lose in a day. Optional global and per-API-key stroop budgets close that gap, verified live with a real `402` rejection once exhausted — not just asserted in a unit test.
+- **CORS is a real, configurable allowlist, not silently wide open.** The dashboard calls this relayer directly from a browser, so an unrestricted `cors()` would let *any* website's JavaScript do the same. `CORS_ORIGINS` restricts this for real — verified live by checking the actual `Access-Control-Allow-Origin` response header is present for an allowed origin and genuinely absent for one that isn't.
 
 ---
 
@@ -85,6 +86,9 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 ### 7. Daily Sponsorship Spend Budget (`src/middleware/spend_budget.ts`)
 * **Real Budget Enforcement (2026-09-06)**: Optional global and per-API-key daily caps, in stroops, on how much the relayer will sponsor — rate limiting bounds *request count*, this bounds real XLM exposure. Checked against the fee-bump bid (Horizon's immediate submit response doesn't return the actual `fee_charged`, only a later fetch-by-hash does — using the bid is a deliberately conservative choice: it can only reserve more headroom than a transaction actually uses, never less). Only counts real, successful relays toward the budget — a failed or rejected attempt never consumes it. Rejects with `402` once exhausted, resetting at 00:00 UTC. Both caps default to `0` (unlimited), so a fresh setup isn't forced to configure one just to start.
 
+### 8. CORS Allowlist (`src/cors_config.ts`)
+* **Real Origin Restriction (2026-09-06)**: `CORS_ORIGINS` restricts which browser origins can call this relayer directly, instead of the wide-open `Access-Control-Allow-Origin: *` Express's bare `cors()` sends by default. A request with no `Origin` header at all (server-to-server calls, curl) is never restricted — there's no cross-origin browser request to police in that case. Empty (the default) keeps the permissive behavior for local dev and server-to-server-only deployments.
+
 ---
 
 ## Environment Configuration Matrix
@@ -102,6 +106,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 | `DAPP_API_KEYS` | Comma-separated keys you issue to integrating dApps. Required — the service refuses to start with an empty allowlist. | `st_gas_live_abc,st_gas_live_def` |
 | `GLOBAL_DAILY_BUDGET_STROOPS` | Max total stroops the relayer will sponsor across all callers per UTC day. Optional — `0` means unlimited. | `0` |
 | `PER_KEY_DAILY_BUDGET_STROOPS` | Max stroops a single API key can have sponsored per UTC day. Optional — `0` means unlimited. | `0` |
+| `CORS_ORIGINS` | Comma-separated allowed browser origins. Optional — empty means any origin is allowed (a startup warning is printed, not a hard failure). | `https://your-dapp.example` |
 
 ---
 
