@@ -12,7 +12,7 @@ import { KeypairPoolQueue } from './relayer/queue';
 import { SorobanSimulator } from './relayer/simulation';
 import { apiKeyMiddleware } from './middleware/api_key';
 import { rateLimitMiddleware } from './middleware/rate_limit';
-import { spendBudgetMiddleware, recordSpend } from './middleware/spend_budget';
+import { spendBudgetMiddleware, releaseReservedBudget } from './middleware/spend_budget';
 import { buildCorsOptions } from './cors_config';
 import { RelayerLogger } from './middleware/logger';
 import { telemetry } from './telemetry/metrics';
@@ -84,15 +84,22 @@ app.get('/metrics.json', (req: Request, res: Response) => {
 
 // Main Gasless Relay Endpoint
 app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, spendBudgetMiddleware, async (req: Request, res: Response) => {
+  // Same derivation apiKeyMiddleware/spendBudgetMiddleware used, so this always matches the
+  // key spendBudgetMiddleware already reserved the fee-bump bid against for this request.
+  const headerKey = req.headers['x-api-key'];
+  const apiKey = (Array.isArray(headerKey) ? headerKey[0] : headerKey) || req.body?.dappApiKey || 'unknown';
+
   try {
     const { innerTransactionXdr, dappApiKey, paymasterAddress } = req.body;
     if (!innerTransactionXdr) {
+      releaseReservedBudget(apiKey);
       return res.status(400).json({ error: 'Missing innerTransactionXdr payload' });
     }
 
     // Pre-flight simulation: reject failing invocations before we spend anything sponsoring them.
     const simulation = await simulator.simulateTransaction(innerTransactionXdr);
     if (!simulation.isSuccess) {
+      releaseReservedBudget(apiKey);
       return res.status(400).json({
         success: false,
         error: `Soroban simulation failed, not sponsoring: ${simulation.error}`,
@@ -106,12 +113,10 @@ app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, spendBudgetMiddlewa
     );
     // The real fee-bump bid — the actual fee_charged isn't in Horizon's immediate submit
     // response (only a later fetch-by-hash returns it), so this is the same conservative
-    // figure spend_budget.ts checks against, not a placeholder.
+    // figure spendBudgetMiddleware already reserved against, not a placeholder. Nothing
+    // further to record here: the reservation itself IS this relay's recorded spend.
     const feeBidStroops = parseInt(config.maxFeeStroops, 10);
     telemetry.recordSuccess(feeBidStroops);
-    const headerKey = req.headers['x-api-key'];
-    const apiKey = (Array.isArray(headerKey) ? headerKey[0] : headerKey) || dappApiKey || 'unknown';
-    recordSpend(apiKey, feeBidStroops);
     RelayerLogger.logTransactionSuccess(txResult.hash, config.networkPassphrase.includes('Public') ? 'public' : 'testnet');
 
     return res.json({
@@ -120,6 +125,7 @@ app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, spendBudgetMiddlewa
       resultXdr: txResult.result_xdr,
     });
   } catch (error: any) {
+    releaseReservedBudget(apiKey);
     telemetry.recordFailure();
     // Horizon's own SDK throws an axios error whose generic `.message` (e.g. "Request
     // failed with status code 400") hides the actual reason — the real cause lives in

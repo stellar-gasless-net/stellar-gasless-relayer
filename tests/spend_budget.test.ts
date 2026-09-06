@@ -83,4 +83,48 @@ describe('spend budget', () => {
     expect(getDailySpend('key-b')).toBe(700_000);
     expect(getDailySpend()).toBe(1_000_000);
   });
+
+  it('reserves the prospective spend at check time, so a burst of same-tick requests cannot collectively exceed the cap', async () => {
+    // Regression test for a real TOCTOU bug: index.ts calls spendBudgetMiddleware BEFORE
+    // awaiting simulation/relay, and only used to record spend AFTER those awaits resolved.
+    // Concurrent requests could all pass the check before any of them recorded spend,
+    // making the cap advisory instead of enforced. Fixed by having the check itself reserve
+    // the cost synchronously. This test proves the fix without needing real concurrency:
+    // if reservation were deferred (the old bug), all 3 calls below would pass, since
+    // nothing here ever calls a separate "recordSpend after success" step.
+    const { spendBudgetMiddleware, getDailySpend } = await freshModule('1000000', '0', '2000000');
+    const next = vi.fn() as NextFunction;
+
+    spendBudgetMiddleware(makeReq('key-a'), makeRes(), next); // 0 -> 1,000,000 (reserved)
+    spendBudgetMiddleware(makeReq('key-a'), makeRes(), next); // 1,000,000 -> 2,000,000 (reserved)
+    const res = makeRes();
+    spendBudgetMiddleware(makeReq('key-a'), res, next); // would push to 3,000,000 — over the 2,000,000 cap
+
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(res.status).toHaveBeenCalledWith(402);
+    expect(getDailySpend('key-a')).toBe(2_000_000);
+  });
+
+  it('releaseReservedBudget rolls back a reservation for a relay that never completed, freeing that headroom back up', async () => {
+    const { spendBudgetMiddleware, releaseReservedBudget, getDailySpend } = await freshModule('1000000', '0', '1000000');
+    const next = vi.fn() as NextFunction;
+
+    spendBudgetMiddleware(makeReq('key-a'), makeRes(), next); // reserves the full 1,000,000 cap
+    expect(getDailySpend('key-a')).toBe(1_000_000);
+
+    releaseReservedBudget('key-a'); // simulates the relay failing after the reservation was made
+    expect(getDailySpend('key-a')).toBe(0);
+
+    // Budget headroom is back, so a fresh request should be allowed again.
+    const res = makeRes();
+    spendBudgetMiddleware(makeReq('key-a'), res, next);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it('releaseReservedBudget never lets a total go negative', async () => {
+    const { releaseReservedBudget, getDailySpend } = await freshModule('1000000', '0', '0');
+
+    releaseReservedBudget('key-a'); // nothing was ever reserved for this key
+    expect(getDailySpend('key-a')).toBe(0);
+  });
 });
