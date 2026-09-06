@@ -110,14 +110,17 @@ curl -X POST http://localhost:3001/v1/relay \
 
 ## 🧪 Testing & Verification
 
-Run tests and ensure TypeScript compilation succeeds cleanly:
+Run the exact same checks CI runs, in the same order:
 
 ```bash
-# 1. Run unit tests (vitest)
-npm test
+# 1. Check for accidentally committed secrets or leftover local artifacts (.env, .claude/, etc.)
+bash scripts/check-source-artifacts.sh
 
 # 2. Verify TypeScript build compilation
 npm run build
+
+# 3. Run unit tests (vitest)
+npm test
 ```
 
 CI runs both of these on every push and PR — see `.github/workflows/ci.yml`.

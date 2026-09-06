@@ -127,6 +127,7 @@ Please review our dedicated **[`CONTRIBUTING.md`](./CONTRIBUTING.md)** guide bef
 
 ### Pull Request Checklist:
 - [ ] Claim an issue tagged `good first issue`, `intermediate`, or `advanced`.
+- [ ] `bash scripts/check-source-artifacts.sh` passes — no accidentally committed secrets or leftover local/dev artifacts.
 - [ ] Run `npm test` (vitest) and ensure all TypeScript files compile cleanly (`npm run build`).
 - [ ] Follow Conventional Commits format (`feat: ...`, `fix: ...`, `docs: ...`).
 
