@@ -90,6 +90,13 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 ### 8. CORS Allowlist (`src/cors_config.ts`)
 * **Real Origin Restriction (2026-09-06)**: `CORS_ORIGINS` restricts which browser origins can call this relayer directly, instead of the wide-open `Access-Control-Allow-Origin: *` Express's bare `cors()` sends by default. A request with no `Origin` header at all (server-to-server calls, curl) is never restricted — there's no cross-origin browser request to police in that case. Empty (the default) keeps the permissive behavior for local dev and server-to-server-only deployments.
 
+### Enforced Invariants → Test Mapping
+
+| Invariant | Mapped Test |
+|---|---|
+| A burst of same-tick requests can't collectively exceed the daily spend cap | `tests/spend_budget.test.ts` → `'reserves the prospective spend at check time, so a burst of same-tick requests cannot collectively exceed the cap'` |
+| A reservation is correctly released if the relay never completes | `tests/spend_budget.test.ts` → `'releaseReservedBudget rolls back a reservation for a relay that never completed, freeing that headroom back up'` |
+
 ---
 
 ## Environment Configuration Matrix
