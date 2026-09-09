@@ -28,6 +28,18 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 
 ---
 
+## Contents
+
+- [Relayer Engine Architecture & Flow](#relayer-engine-architecture--flow)
+- [Detailed Component Capabilities](#detailed-component-capabilities)
+- [Enforced Invariants → Test Mapping](#enforced-invariants--test-mapping)
+- [Environment Configuration Matrix](#environment-configuration-matrix)
+- [Ecosystem](#ecosystem)
+- [Contributing & CONTRIBUTING.md Guidelines](#contributing--contributingmd-guidelines)
+- [Future Improvements & Relayer Roadmap](#future-improvements--relayer-roadmap)
+
+---
+
 ## Relayer Engine Architecture & Flow
 
 ```
@@ -64,36 +76,72 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 
 ## Detailed Component Capabilities
 
-### 1. Multi-Keypair Queue Manager (`src/relayer/queue.ts`)
+<details open>
+<summary><strong>1. Multi-Keypair Queue Manager (<code>src/relayer/queue.ts</code>)</strong></summary>
+
 * **Race Condition Prevention**: Rotates sponsoring keypairs from `RELAYER_SECRETS` on every `/v1/relay` call, so bursts of requests don't collide on the same account's sequence number. Fails fast at startup (not silently) if no valid secrets are configured.
 
-### 2. Soroban RPC Simulator (`src/relayer/simulation.ts`)
+</details>
+
+<details open>
+<summary><strong>2. Soroban RPC Simulator (<code>src/relayer/simulation.ts</code>)</strong></summary>
+
 * **Pre-Flight Dry Run**: Calls Soroban RPC's `simulateTransaction` method (a separate service from Horizon — see `SOROBAN_RPC_URL` below) to get real resource-cost estimates and reject failing invocations *before* the relayer spends a fee sponsoring them. Runs on every `/v1/relay` request.
 
-### 3. FeeBump Builder (`src/relayer/fee_bump.ts`)
+</details>
+
+<details open>
+<summary><strong>3. FeeBump Builder (<code>src/relayer/fee_bump.ts</code>)</strong></summary>
+
 * **Stellar Fee Sponsorship**: Constructs native `FeeBumpTransaction` instances, wrapping inner signed user payloads and signing as Fee Sponsor with whichever keypair the queue hands it.
 
-### 4. Telemetry (`src/telemetry/metrics.ts`)
+</details>
+
+<details open>
+<summary><strong>4. Telemetry (<code>src/telemetry/metrics.ts</code>)</strong></summary>
+
 * **`/metrics`**: real Prometheus text exposition format — relayed/failed counters, stroops spent, uptime. **Fixed 2026-09-06**: the stroops-spent counter was silently incrementing by a hardcoded placeholder (`100`) on every success, completely disconnected from the real fee bid — the `/metrics` endpoint's spend figures were never real numbers. Now records the actual `MAX_FEE_STROOPS` bid per relay.
 * **`/metrics.json`**: the same counters as JSON, for tooling that doesn't want to parse Prometheus text.
 
-### 5. API Key Auth (`src/middleware/api_key.ts`)
+</details>
+
+<details open>
+<summary><strong>5. API Key Auth (<code>src/middleware/api_key.ts</code>)</strong></summary>
+
 * **Real Validation**: Rejects with 401 unless the caller's `X-API-Key` header (or `dappApiKey` body field) matches one of the operator-configured `DAPP_API_KEYS`. Runs before rate limiting, so an unauthenticated caller can't spend any of the relayer's work budget.
 
-### 6. Rate Limiter (`src/middleware/rate_limit.ts`)
+</details>
+
+<details open>
+<summary><strong>6. Rate Limiter (<code>src/middleware/rate_limit.ts</code>)</strong></summary>
+
 * **Fixed Window, Per-API-Key**: Buckets by the (now-validated) API key rather than caller IP, so each integrating dApp gets its own independent quota instead of every caller behind one corporate NAT IP sharing one bucket.
 
-### 7. Daily Sponsorship Spend Budget (`src/middleware/spend_budget.ts`)
+</details>
+
+<details open>
+<summary><strong>7. Daily Sponsorship Spend Budget (<code>src/middleware/spend_budget.ts</code>)</strong></summary>
+
 * **Real Budget Enforcement (2026-09-06)**: Optional global and per-API-key daily caps, in stroops, on how much the relayer will sponsor — rate limiting bounds *request count*, this bounds real XLM exposure. Checked against the fee-bump bid (Horizon's immediate submit response doesn't return the actual `fee_charged`, only a later fetch-by-hash does — using the bid is a deliberately conservative choice: it can only reserve more headroom than a transaction actually uses, never less). Rejects with `402` once exhausted, resetting at 00:00 UTC. Both caps default to `0` (unlimited), so a fresh setup isn't forced to configure one just to start.
 * **Reserved at check time, not recorded after the fact.** The budget check runs before the `await`s on Soroban simulation and Horizon submission — if spend were only recorded after a relay succeeded, concurrent requests could all pass the check before any of them recorded spend, letting the cap be blown through under load. Fixed by reserving the prospective cost synchronously in the same check, then releasing it if the relay is rejected or fails, so only real, successful relays end up counting against the day's total — verified with a dedicated concurrency-regression test, not just the happy-path unit tests.
 
-### 8. CORS Allowlist (`src/cors_config.ts`)
+</details>
+
+<details open>
+<summary><strong>8. CORS Allowlist (<code>src/cors_config.ts</code>)</strong></summary>
+
 * **Real Origin Restriction (2026-09-06)**: `CORS_ORIGINS` restricts which browser origins can call this relayer directly, instead of the wide-open `Access-Control-Allow-Origin: *` Express's bare `cors()` sends by default. A request with no `Origin` header at all (server-to-server calls, curl) is never restricted — there's no cross-origin browser request to police in that case. Empty (the default) keeps the permissive behavior for local dev and server-to-server-only deployments.
 
-### 9. Sponsorship Policy Engine (`src/relayer/policy.ts`, `src/middleware/policy.ts`)
+</details>
+
+<details open>
+<summary><strong>9. Sponsorship Policy Engine (<code>src/relayer/policy.ts</code>, <code>src/middleware/policy.ts</code>)</strong></summary>
+
 * **Per-dApp policies, not one flat global budget (2026-09-09)**, modeled on Pimlico/Biconomy paymaster sponsorship policies: `SPONSOR_POLICIES_JSON` lets each API key have its own daily budget override, a per-end-user daily sponsored-transaction cap, and/or a contract allowlist restricting which contracts that key may have sponsored at all. A key with no entry keeps the existing flat `PER_KEY_DAILY_BUDGET_STROOPS` behavior — fully backward compatible.
 * **The contract allowlist parses the real inner transaction**, not a guess — `extractInvokedContractIds` decodes the actual `invokeHostFunction` operations from the submitted XDR and checks every contract address it finds against the configured allowlist. The per-user cap uses the inner transaction's own source account as the "end user" identity (that's genuinely who's asking to transact, not the dApp's own API key), tracked with the same synchronous check-and-reserve pattern the spend budget uses, plus an hourly sweep so the per-user tracking map doesn't grow unbounded the way an un-swept per-IP map would.
 * **Known gap, tracked as an open issue**: the allowlist only inspects `invokeHostFunction` operations — a transaction mixing a whitelisted contract call with an unrelated classic operation (a payment, `ChangeTrust`, etc.) currently passes the allowlist check untouched.
+
+</details>
 
 ### Enforced Invariants → Test Mapping
 
