@@ -12,7 +12,9 @@ import { KeypairPoolQueue } from './relayer/queue';
 import { SorobanSimulator } from './relayer/simulation';
 import { apiKeyMiddleware } from './middleware/api_key';
 import { rateLimitMiddleware } from './middleware/rate_limit';
+import { policyMiddleware } from './middleware/policy';
 import { spendBudgetMiddleware, releaseReservedBudget } from './middleware/spend_budget';
+import { releaseUserSponsorship } from './relayer/policy';
 import { buildCorsOptions } from './cors_config';
 import { RelayerLogger } from './middleware/logger';
 import { telemetry } from './telemetry/metrics';
@@ -82,8 +84,19 @@ app.get('/metrics.json', (req: Request, res: Response) => {
   res.json(telemetry.getMetrics());
 });
 
+/** Mirrors releaseReservedBudget for the per-user sponsorship count policyMiddleware
+ * reserves — a no-op if that middleware never actually reserved anything for this request
+ * (e.g. the missing-innerTransactionXdr case, which policyMiddleware itself skips). */
+function releasePolicyReservation(res: Response) {
+  const userAddress = (res.locals as any).policyUserAddress;
+  const apiKey = (res.locals as any).policyApiKey;
+  if (userAddress && apiKey) {
+    releaseUserSponsorship(apiKey, userAddress);
+  }
+}
+
 // Main Gasless Relay Endpoint
-app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, spendBudgetMiddleware, async (req: Request, res: Response) => {
+app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, policyMiddleware, spendBudgetMiddleware, async (req: Request, res: Response) => {
   // Same derivation apiKeyMiddleware/spendBudgetMiddleware used, so this always matches the
   // key spendBudgetMiddleware already reserved the fee-bump bid against for this request.
   const headerKey = req.headers['x-api-key'];
@@ -93,6 +106,7 @@ app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, spendBudgetMiddlewa
     const { innerTransactionXdr, dappApiKey, paymasterAddress } = req.body;
     if (!innerTransactionXdr) {
       releaseReservedBudget(apiKey);
+      releasePolicyReservation(res);
       return res.status(400).json({ error: 'Missing innerTransactionXdr payload' });
     }
 
@@ -100,6 +114,7 @@ app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, spendBudgetMiddlewa
     const simulation = await simulator.simulateTransaction(innerTransactionXdr);
     if (!simulation.isSuccess) {
       releaseReservedBudget(apiKey);
+      releasePolicyReservation(res);
       return res.status(400).json({
         success: false,
         error: `Soroban simulation failed, not sponsoring: ${simulation.error}`,
@@ -126,6 +141,7 @@ app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, spendBudgetMiddlewa
     });
   } catch (error: any) {
     releaseReservedBudget(apiKey);
+    releasePolicyReservation(res);
     telemetry.recordFailure();
     // Horizon's own SDK throws an axios error whose generic `.message` (e.g. "Request
     // failed with status code 400") hides the actual reason — the real cause lives in

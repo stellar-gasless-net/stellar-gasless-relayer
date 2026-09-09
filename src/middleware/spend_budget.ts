@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { loadConfig } from '../config';
+import { getPolicyForKey } from '../relayer/policy';
 
 const config = loadConfig();
 const GLOBAL_BUDGET = config.globalDailyBudgetStroops;
-const PER_KEY_BUDGET = config.perKeyDailyBudgetStroops;
 const PROSPECTIVE_SPEND_STROOPS = parseInt(config.maxFeeStroops, 10);
 
 interface DailyTotal {
@@ -44,11 +44,15 @@ export function checkBudget(apiKey: string): { ok: true } | { ok: false; reason:
   const today = currentUtcDay();
   globalTotal = rollIfNewDay(globalTotal, today);
   const keyTotal = rollIfNewDay(perKeyTotals.get(apiKey) ?? { day: today, stroops: 0 }, today);
+  // Resolves this key's own configured budget from its sponsorship policy (see
+  // relayer/policy.ts) — different dApps can have different caps, rather than every key
+  // sharing one flat PER_KEY_DAILY_BUDGET_STROOPS value.
+  const perKeyBudget = getPolicyForKey(apiKey).dailyBudgetStroops;
 
   if (GLOBAL_BUDGET > 0 && globalTotal.stroops + PROSPECTIVE_SPEND_STROOPS > GLOBAL_BUDGET) {
     return { ok: false, reason: 'global daily sponsorship budget exhausted' };
   }
-  if (PER_KEY_BUDGET > 0 && keyTotal.stroops + PROSPECTIVE_SPEND_STROOPS > PER_KEY_BUDGET) {
+  if (perKeyBudget > 0 && keyTotal.stroops + PROSPECTIVE_SPEND_STROOPS > perKeyBudget) {
     return { ok: false, reason: "this API key's daily sponsorship budget exhausted" };
   }
 
