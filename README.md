@@ -90,12 +90,19 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 ### 8. CORS Allowlist (`src/cors_config.ts`)
 * **Real Origin Restriction (2026-09-06)**: `CORS_ORIGINS` restricts which browser origins can call this relayer directly, instead of the wide-open `Access-Control-Allow-Origin: *` Express's bare `cors()` sends by default. A request with no `Origin` header at all (server-to-server calls, curl) is never restricted — there's no cross-origin browser request to police in that case. Empty (the default) keeps the permissive behavior for local dev and server-to-server-only deployments.
 
+### 9. Sponsorship Policy Engine (`src/relayer/policy.ts`, `src/middleware/policy.ts`)
+* **Per-dApp policies, not one flat global budget (2026-09-09)**, modeled on Pimlico/Biconomy paymaster sponsorship policies: `SPONSOR_POLICIES_JSON` lets each API key have its own daily budget override, a per-end-user daily sponsored-transaction cap, and/or a contract allowlist restricting which contracts that key may have sponsored at all. A key with no entry keeps the existing flat `PER_KEY_DAILY_BUDGET_STROOPS` behavior — fully backward compatible.
+* **The contract allowlist parses the real inner transaction**, not a guess — `extractInvokedContractIds` decodes the actual `invokeHostFunction` operations from the submitted XDR and checks every contract address it finds against the configured allowlist. The per-user cap uses the inner transaction's own source account as the "end user" identity (that's genuinely who's asking to transact, not the dApp's own API key), tracked with the same synchronous check-and-reserve pattern the spend budget uses, plus an hourly sweep so the per-user tracking map doesn't grow unbounded the way an un-swept per-IP map would.
+* **Known gap, tracked as an open issue**: the allowlist only inspects `invokeHostFunction` operations — a transaction mixing a whitelisted contract call with an unrelated classic operation (a payment, `ChangeTrust`, etc.) currently passes the allowlist check untouched.
+
 ### Enforced Invariants → Test Mapping
 
 | Invariant | Mapped Test |
 |---|---|
 | A burst of same-tick requests can't collectively exceed the daily spend cap | `tests/spend_budget.test.ts` → `'reserves the prospective spend at check time, so a burst of same-tick requests cannot collectively exceed the cap'` |
 | A reservation is correctly released if the relay never completes | `tests/spend_budget.test.ts` → `'releaseReservedBudget rolls back a reservation for a relay that never completed, freeing that headroom back up'` |
+| A per-user sponsorship cap can't be exceeded, and different users under the same key have independent caps | `tests/policy.test.ts` → `'checkAndRecordUserSponsorship allows up to the configured cap, then rejects the next attempt'`, `'different users under the same dApp key have independent caps'` |
+| A contract allowlist rejects a call to a contract not on the list, but allows a plain payment with no contract invocation | `tests/policy.test.ts` → `'isContractAllowed rejects a call to a contract that is NOT on the allowlist'`, `'isContractAllowed allows a plain payment (no contract invocation) even with an allowlist configured'` |
 
 ---
 
@@ -115,6 +122,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 | `GLOBAL_DAILY_BUDGET_STROOPS` | Max total stroops the relayer will sponsor across all callers per UTC day. Optional — `0` means unlimited. | `0` |
 | `PER_KEY_DAILY_BUDGET_STROOPS` | Max stroops a single API key can have sponsored per UTC day. Optional — `0` means unlimited. | `0` |
 | `CORS_ORIGINS` | Comma-separated allowed browser origins. Optional — empty means any origin is allowed (a startup warning is printed, not a hard failure). | `https://your-dapp.example` |
+| `SPONSOR_POLICIES_JSON` | Per-dApp sponsorship policy overrides, as a JSON object keyed by API key — different daily budgets, a per-end-user daily sponsored-tx cap, and/or a contract allowlist per key. Optional — a key with no entry falls back to `PER_KEY_DAILY_BUDGET_STROOPS` with no other restrictions. Malformed JSON is logged and ignored (falls back to defaults for every key), not a startup failure. | `{"st_gas_test_key":{"maxSponsoredTxPerUserPerDay":5}}` |
 
 ---
 
