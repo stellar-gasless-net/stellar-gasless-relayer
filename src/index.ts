@@ -13,7 +13,7 @@ import { SorobanSimulator } from './relayer/simulation';
 import { apiKeyMiddleware } from './middleware/api_key';
 import { rateLimitMiddleware } from './middleware/rate_limit';
 import { policyMiddleware } from './middleware/policy';
-import { spendBudgetMiddleware, releaseReservedBudget } from './middleware/spend_budget';
+import { spendBudgetMiddleware, releaseReservedBudget, getDailySpend } from './middleware/spend_budget';
 import { releaseUserSponsorship } from './relayer/policy';
 import { buildCorsOptions } from './cors_config';
 import { RelayerLogger } from './middleware/logger';
@@ -81,7 +81,22 @@ app.get('/metrics', (req: Request, res: Response) => {
 
 // JSON telemetry, for dashboards/tooling that would rather not parse Prometheus text
 app.get('/metrics.json', (req: Request, res: Response) => {
-  res.json(telemetry.getMetrics());
+  const globalLimitStroops = config.globalDailyBudgetStroops;
+  const now = new Date();
+  const nextUtcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+
+  res.json({
+    ...telemetry.getMetrics(),
+    // Real today's-spend state from spend_budget.ts's own tracked totals, not derived from
+    // the lifetime totalStroopsSpent counter above (which never resets and isn't scoped to
+    // the UTC calendar day the budget actually resets on). `globalLimitStroops: 0` means no
+    // configured cap (unlimited) — the dashboard should show that as such, not as "0% used".
+    dailyBudget: {
+      globalLimitStroops,
+      globalSpentStroops: getDailySpend(),
+      resetsAt: nextUtcMidnight.toISOString(),
+    },
+  });
 });
 
 /** Mirrors releaseReservedBudget for the per-user sponsorship count policyMiddleware
