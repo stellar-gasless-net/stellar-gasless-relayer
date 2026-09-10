@@ -101,7 +101,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 <summary><strong>4. Telemetry (<code>src/telemetry/metrics.ts</code>)</strong></summary>
 
 * **`/metrics`**: real Prometheus text exposition format — relayed/failed counters, stroops spent, uptime. **Fixed 2026-09-06**: the stroops-spent counter was silently incrementing by a hardcoded placeholder (`100`) on every success, completely disconnected from the real fee bid — the `/metrics` endpoint's spend figures were never real numbers. Now records the actual `MAX_FEE_STROOPS` bid per relay.
-* **`/metrics.json`**: the same counters as JSON, for tooling that doesn't want to parse Prometheus text.
+* **`/metrics.json`**: the same counters as JSON, for tooling that doesn't want to parse Prometheus text. **Added 2026-09-10**: a `dailyBudget` object (`globalLimitStroops`, `globalSpentStroops`, `resetsAt`) — real today's-spend state from `spend_budget.ts`'s own tracked totals, not derived from the lifetime `totalStroopsSpent` counter above (which never resets and isn't scoped to the UTC calendar day the budget actually resets on). `globalLimitStroops: 0` means no configured cap. Modeled on Superfluid Explorer's "Pred. liquidation: <date>" pattern — `gasless-relayer-dashboard`'s Overview tab reads this to show a plain-language "X% of today's budget used, resets in Yh Zm" line.
 
 </details>
 
