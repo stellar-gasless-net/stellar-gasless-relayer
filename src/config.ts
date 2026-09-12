@@ -16,6 +16,15 @@ export interface RelayerConfig {
   /** Empty means "allow any origin" (the same default Express's bare cors() has). Configuring
    * this is what actually restricts which browser origins can call this relayer directly. */
   corsOrigins: string[];
+  /** Empty (the default) disables the zkident credential tiering integration entirely — every
+   * user is treated identically, same as before it existed. Set to a real deployed
+   * stellar-zklab/stellar-zkident credential_verifier contract ID to enable it. See
+   * relayer/zkident.ts. */
+  zkidentCredentialVerifierId: string;
+  /** Which credential_type a user must hold a verified credential_verifier record for to
+   * qualify for the verified-tier sponsorship cap. Only meaningful when
+   * zkidentCredentialVerifierId is set. */
+  zkidentRequiredCredentialType: string;
 }
 
 export function loadConfig(): RelayerConfig {
@@ -50,5 +59,7 @@ export function loadConfig(): RelayerConfig {
     globalDailyBudgetStroops: parseInt(process.env.GLOBAL_DAILY_BUDGET_STROOPS || '0', 10),
     perKeyDailyBudgetStroops: parseInt(process.env.PER_KEY_DAILY_BUDGET_STROOPS || '0', 10),
     corsOrigins,
+    zkidentCredentialVerifierId: process.env.ZKIDENT_CREDENTIAL_VERIFIER_ID || '',
+    zkidentRequiredCredentialType: process.env.ZKIDENT_REQUIRED_CREDENTIAL_TYPE || 'kyc_tier_2',
   };
 }

@@ -17,6 +17,12 @@ export interface SponsorPolicy {
   maxSponsoredTxPerUserPerDay: number;
   /** undefined/empty means "no restriction" — any contract may be invoked. */
   allowedContractIds?: string[];
+  /** Cap for a user who genuinely holds a verified stellar-zkident credential (see
+   * relayer/zkident.ts) — 0 means unlimited, same convention as the other caps here.
+   * undefined (the default) means "no differentiation": every user, verified or not, gets
+   * maxSponsoredTxPerUserPerDay, exactly the behavior this integration didn't change for a
+   * key that hasn't opted into it. */
+  maxSponsoredTxPerVerifiedUserPerDay?: number;
 }
 
 function defaultPolicy(): SponsorPolicy {
@@ -124,17 +130,33 @@ sweepInterval.unref();
 /** Checks and, if allowed, immediately records one sponsored transaction against this
  * user's daily cap under this dApp's policy — synchronous check-and-record, same reasoning
  * as spend_budget.ts's checkBudget: this must happen before any `await`, or concurrent
- * requests from the same user could all pass the check before any of them recorded usage. */
-export function checkAndRecordUserSponsorship(policy: SponsorPolicy, apiKey: string, userAddress: string): { ok: true } | { ok: false; reason: string } {
-  if (policy.maxSponsoredTxPerUserPerDay <= 0) {
+ * requests from the same user could all pass the check before any of them recorded usage.
+ *
+ * `verified` (resolved by the caller via relayer/zkident.ts's real has_credential check,
+ * BEFORE this function runs — never awaited partway through it) selects which cap applies:
+ * a verified user gets maxSponsoredTxPerVerifiedUserPerDay when the policy sets one,
+ * otherwise everyone gets the same maxSponsoredTxPerUserPerDay this always used. */
+export function checkAndRecordUserSponsorship(
+  policy: SponsorPolicy,
+  apiKey: string,
+  userAddress: string,
+  verified: boolean = false
+): { ok: true } | { ok: false; reason: string } {
+  const cap =
+    verified && policy.maxSponsoredTxPerVerifiedUserPerDay !== undefined
+      ? policy.maxSponsoredTxPerVerifiedUserPerDay
+      : policy.maxSponsoredTxPerUserPerDay;
+
+  if (cap <= 0) {
     return { ok: true };
   }
   const today = currentUtcDay();
   const key = `${apiKey}:${userAddress}`;
   const entry = rollIfNewDay(userSponsorCounts.get(key) ?? { day: today, count: 0 }, today);
 
-  if (entry.count >= policy.maxSponsoredTxPerUserPerDay) {
-    return { ok: false, reason: `user ${userAddress} has hit this dApp's daily sponsored-transaction limit (${policy.maxSponsoredTxPerUserPerDay})` };
+  if (entry.count >= cap) {
+    const tierNote = verified ? ' — verified-credential tier' : '';
+    return { ok: false, reason: `user ${userAddress} has hit this dApp's daily sponsored-transaction limit (${cap}${tierNote})` };
   }
 
   entry.count += 1;

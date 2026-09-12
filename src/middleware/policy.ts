@@ -6,6 +6,7 @@ import {
   getPolicyForKey,
   isContractAllowed,
 } from '../relayer/policy';
+import { hasVerifiedCredential } from '../relayer/zkident';
 
 const config = loadConfig();
 
@@ -19,8 +20,16 @@ const config = loadConfig();
  * `relayTransaction` — parsing it here too is a deliberate small duplication rather than
  * restructuring the whole request flow around a policy engine that only two of the
  * possible checks actually need.
+ *
+ * Also resolves whether the end user holds a real verified stellar-zkident credential (a
+ * genuine cross-org dependency — see relayer/zkident.ts) so the per-user cap below can give
+ * verified users a higher (or unlimited) daily sponsorship allowance, tightening the default
+ * cap for anyone who hasn't verified anything. That resolution is awaited BEFORE the
+ * synchronous check-and-record call, never partway through it — the race
+ * checkAndRecordUserSponsorship's own doc comment warns about is specifically the
+ * read-compare-write of the count itself, which stays fully synchronous.
  */
-export function policyMiddleware(req: Request, res: Response, next: NextFunction) {
+export async function policyMiddleware(req: Request, res: Response, next: NextFunction) {
   const headerKey = req.headers['x-api-key'];
   const apiKey = (Array.isArray(headerKey) ? headerKey[0] : headerKey) || req.body?.dappApiKey || 'unknown';
   const { innerTransactionXdr } = req.body;
@@ -50,7 +59,8 @@ export function policyMiddleware(req: Request, res: Response, next: NextFunction
     return res.status(403).json({ success: false, error: contractCheck.reason });
   }
 
-  const userCheck = checkAndRecordUserSponsorship(policy, apiKey, userAddress);
+  const verified = await hasVerifiedCredential(userAddress);
+  const userCheck = checkAndRecordUserSponsorship(policy, apiKey, userAddress, verified);
   if (!userCheck.ok) {
     return res.status(429).json({ success: false, error: userCheck.reason });
   }
@@ -59,6 +69,7 @@ export function policyMiddleware(req: Request, res: Response, next: NextFunction
   // spendBudgetMiddleware's reservation gets released via releaseReservedBudget.
   (res.locals as any).policyUserAddress = userAddress;
   (res.locals as any).policyApiKey = apiKey;
+  (res.locals as any).policyUserVerified = verified;
 
   next();
 }

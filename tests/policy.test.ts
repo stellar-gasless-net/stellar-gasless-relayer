@@ -183,4 +183,74 @@ describe('sponsorship policy engine', () => {
     releaseUserSponsorship('dapp-a', user);
     expect(checkAndRecordUserSponsorship(policy, 'dapp-a', user).ok).toBe(true);
   });
+
+  describe('verified-tier sponsorship cap (stellar-zkident integration)', () => {
+    it('an unverified user still gets exactly maxSponsoredTxPerUserPerDay when no verified tier is configured', async () => {
+      const { checkAndRecordUserSponsorship } = await freshModule();
+      const policy = { dailyBudgetStroops: 0, maxSponsoredTxPerUserPerDay: 1, allowedContractIds: undefined };
+      const user = Keypair.random().publicKey();
+
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', user, false).ok).toBe(true);
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', user, false).ok).toBe(false);
+    });
+
+    it('calling with no verified argument at all behaves exactly as before this integration existed', async () => {
+      const { checkAndRecordUserSponsorship } = await freshModule();
+      const policy = { dailyBudgetStroops: 0, maxSponsoredTxPerUserPerDay: 1, allowedContractIds: undefined };
+      const user = Keypair.random().publicKey();
+
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', user).ok).toBe(true);
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', user).ok).toBe(false);
+    });
+
+    it('a verified user gets the higher maxSponsoredTxPerVerifiedUserPerDay cap instead of the base one', async () => {
+      const { checkAndRecordUserSponsorship } = await freshModule();
+      const policy = {
+        dailyBudgetStroops: 0,
+        maxSponsoredTxPerUserPerDay: 1,
+        maxSponsoredTxPerVerifiedUserPerDay: 3,
+        allowedContractIds: undefined,
+      };
+      const user = Keypair.random().publicKey();
+
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', user, true).ok).toBe(true);
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', user, true).ok).toBe(true);
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', user, true).ok).toBe(true);
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', user, true).ok).toBe(false);
+    });
+
+    it('maxSponsoredTxPerVerifiedUserPerDay: 0 means unlimited for verified users even when the base cap is finite', async () => {
+      const { checkAndRecordUserSponsorship } = await freshModule();
+      const policy = {
+        dailyBudgetStroops: 0,
+        maxSponsoredTxPerUserPerDay: 1,
+        maxSponsoredTxPerVerifiedUserPerDay: 0,
+        allowedContractIds: undefined,
+      };
+      const user = Keypair.random().publicKey();
+
+      for (let i = 0; i < 10; i++) {
+        expect(checkAndRecordUserSponsorship(policy, 'dapp-a', user, true).ok).toBe(true);
+      }
+    });
+
+    it('verified and unverified users under the same dApp key have independent caps and independent counts', async () => {
+      const { checkAndRecordUserSponsorship } = await freshModule();
+      const policy = {
+        dailyBudgetStroops: 0,
+        maxSponsoredTxPerUserPerDay: 1,
+        maxSponsoredTxPerVerifiedUserPerDay: 2,
+        allowedContractIds: undefined,
+      };
+      const verifiedUser = Keypair.random().publicKey();
+      const unverifiedUser = Keypair.random().publicKey();
+
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', unverifiedUser, false).ok).toBe(true);
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', unverifiedUser, false).ok).toBe(false);
+
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', verifiedUser, true).ok).toBe(true);
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', verifiedUser, true).ok).toBe(true);
+      expect(checkAndRecordUserSponsorship(policy, 'dapp-a', verifiedUser, true).ok).toBe(false);
+    });
+  });
 });

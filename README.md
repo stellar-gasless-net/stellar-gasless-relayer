@@ -143,6 +143,16 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 
 </details>
 
+<details open>
+<summary><strong>10. Verified-Credential Sponsorship Tiering (<code>src/relayer/zkident.ts</code>) — a real cross-org dependency</strong></summary>
+
+* **Real dependency on a different org's repo (2026-09-12), not internal glue.** This relayer (`stellar-gasless-net`) now genuinely depends on `stellar-zklab/stellar-zkident`'s deployed `credential_verifier` contract at runtime — the first time two of this ecosystem's seven repos, across both orgs, actually depend on each other in production rather than just sharing an owner. `hasVerifiedCredential()` builds and simulates (never submits) a real `has_credential(user, credential_type)` cross-contract call against zkident's live testnet instance, talking to Soroban RPC directly with a raw `fetch` the same way `relayer/simulation.ts` already does — not stellar-sdk's heavier `contract.Client`, which would fetch and parse zkident's whole contract spec over the network just for one fixed, known method signature.
+* **Solves a real problem gasless services actually have**: anyone can drain a sponsorship budget with an unlimited number of fresh addresses, since sponsoring is otherwise free to request. `maxSponsoredTxPerVerifiedUserPerDay` (optional, per-key, in `SPONSOR_POLICIES_JSON`) gives addresses holding a real verified zkident credential a higher — or unlimited — daily cap than `maxSponsoredTxPerUserPerDay`, which now applies specifically to unverified addresses. Neither cap changes at all for a key that doesn't set the new field — fully backward compatible, same principle every other policy field here already follows.
+* **Fails closed, on purpose.** Any RPC error, malformed response, or missing config is treated as "not verified," never thrown — an outage in a *different project's* infrastructure must never grant elevated sponsorship trust, and must never take this relayer's own request pipeline down with it. Feature is off by default (`ZKIDENT_CREDENTIAL_VERIFIER_ID` empty) — every user is treated identically until an operator opts in.
+* **Cached for 5 minutes per address**, since real credential status changes rarely (an ASP attests once) — keeps a burst of relay requests from the same address from hammering zkident's Soroban RPC with a simulate call apiece.
+
+</details>
+
 ### Enforced Invariants → Test Mapping
 
 | Invariant | Mapped Test |
@@ -151,6 +161,7 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 | A reservation is correctly released if the relay never completes | `tests/spend_budget.test.ts` → `'releaseReservedBudget rolls back a reservation for a relay that never completed, freeing that headroom back up'` |
 | A per-user sponsorship cap can't be exceeded, and different users under the same key have independent caps | `tests/policy.test.ts` → `'checkAndRecordUserSponsorship allows up to the configured cap, then rejects the next attempt'`, `'different users under the same dApp key have independent caps'` |
 | A contract allowlist rejects a call to a contract not on the list, but allows a plain payment with no contract invocation | `tests/policy.test.ts` → `'isContractAllowed rejects a call to a contract that is NOT on the allowlist'`, `'isContractAllowed allows a plain payment (no contract invocation) even with an allowlist configured'` |
+| A verified address gets the higher per-verified-user cap; an unverified one is still bound by the base cap; a credential-check failure never grants the higher cap | `tests/policy.test.ts` → `'a verified user gets the higher maxSponsoredTxPerVerifiedUserPerDay cap instead of the base one'`; `tests/zkident.test.ts` → `'fails closed to false (not thrown) when Soroban RPC returns a JSON-RPC error'`, `'fails closed to false (not thrown) when the network call itself rejects'` |
 
 ---
 
@@ -170,7 +181,9 @@ This repository houses the **Backend Infrastructure & Transaction Submitter Engi
 | `GLOBAL_DAILY_BUDGET_STROOPS` | Max total stroops the relayer will sponsor across all callers per UTC day. Optional — `0` means unlimited. | `0` |
 | `PER_KEY_DAILY_BUDGET_STROOPS` | Max stroops a single API key can have sponsored per UTC day. Optional — `0` means unlimited. | `0` |
 | `CORS_ORIGINS` | Comma-separated allowed browser origins. Optional — empty means any origin is allowed (a startup warning is printed, not a hard failure). | `https://your-dapp.example` |
-| `SPONSOR_POLICIES_JSON` | Per-dApp sponsorship policy overrides, as a JSON object keyed by API key — different daily budgets, a per-end-user daily sponsored-tx cap, and/or a contract allowlist per key. Optional — a key with no entry falls back to `PER_KEY_DAILY_BUDGET_STROOPS` with no other restrictions. Malformed JSON is logged and ignored (falls back to defaults for every key), not a startup failure. | `{"st_gas_test_key":{"maxSponsoredTxPerUserPerDay":5}}` |
+| `SPONSOR_POLICIES_JSON` | Per-dApp sponsorship policy overrides, as a JSON object keyed by API key — different daily budgets, a per-end-user daily sponsored-tx cap, an optional higher cap for verified users (`maxSponsoredTxPerVerifiedUserPerDay`, see below), and/or a contract allowlist per key. Optional — a key with no entry falls back to `PER_KEY_DAILY_BUDGET_STROOPS` with no other restrictions. Malformed JSON is logged and ignored (falls back to defaults for every key), not a startup failure. | `{"st_gas_test_key":{"maxSponsoredTxPerUserPerDay":5,"maxSponsoredTxPerVerifiedUserPerDay":50}}` |
+| `ZKIDENT_CREDENTIAL_VERIFIER_ID` | Real deployed `stellar-zklab/stellar-zkident` `credential_verifier` contract ID — a genuine cross-org dependency. Optional — empty (the default) disables the verified-tier sponsorship integration entirely, so every user gets `maxSponsoredTxPerUserPerDay` unchanged. | `CDLRSLHALMX6OU5IHWY6CKTROK3SYENEA75K6OWSZCPAW4EOTR2OZGSF` |
+| `ZKIDENT_REQUIRED_CREDENTIAL_TYPE` | Which `credential_type` a user must hold a verified `credential_verifier` record for to qualify for `maxSponsoredTxPerVerifiedUserPerDay`. Only meaningful when `ZKIDENT_CREDENTIAL_VERIFIER_ID` is set. | `kyc_tier_2` |
 
 ---
 
@@ -180,6 +193,8 @@ Part of **stellar-gasless-net**'s gasless meta-transaction protocol suite, along
 - [`soroban-gasless-contracts`](https://github.com/stellar-gasless-net/soroban-gasless-contracts) — the on-chain WASM contracts (trusted forwarder, paymasters, smart account wallet)
 - [`stellar-gasless-sdk`](https://github.com/stellar-gasless-net/stellar-gasless-sdk) — the TypeScript client SDK that talks to this relayer
 - [`gasless-relayer-dashboard`](https://github.com/stellar-gasless-net/gasless-relayer-dashboard) — an admin console that can point at a locally-running instance of this service ([live demo](https://gasless-relayer-dashboard.vercel.app/))
+
+**A real dependency outside stellar-gasless-net (2026-09-12).** The verified-credential sponsorship tiering above (see §10) is a genuine runtime dependency on [`stellar-zklab/stellar-zkident`](https://github.com/stellar-zklab/stellar-zkident)'s deployed `credential_verifier` contract — the first time this ecosystem's two orgs' repos actually depend on each other in production, not just something built and demoed in isolation.
 
 ---
 
