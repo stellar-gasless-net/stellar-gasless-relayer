@@ -25,6 +25,9 @@ export interface RelayerConfig {
    * qualify for the verified-tier sponsorship cap. Only meaningful when
    * zkidentCredentialVerifierId is set. */
   zkidentRequiredCredentialType: string;
+  /** Optional operator token for scraping /metrics and /metrics.json. When set, requests
+   * presenting `Authorization: Bearer <METRICS_TOKEN>` are authorized. */
+  metricsToken: string;
 }
 
 export function loadConfig(): RelayerConfig {
@@ -61,5 +64,6 @@ export function loadConfig(): RelayerConfig {
     corsOrigins,
     zkidentCredentialVerifierId: process.env.ZKIDENT_CREDENTIAL_VERIFIER_ID || '',
     zkidentRequiredCredentialType: process.env.ZKIDENT_REQUIRED_CREDENTIAL_TYPE || 'kyc_tier_2',
+    metricsToken: process.env.METRICS_TOKEN || '',
   };
 }
