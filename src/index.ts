@@ -11,6 +11,7 @@ import { FeeBumpRelayer } from './relayer/fee_bump';
 import { KeypairPoolQueue } from './relayer/queue';
 import { SorobanSimulator } from './relayer/simulation';
 import { apiKeyMiddleware } from './middleware/api_key';
+import { metricsAuthMiddleware } from './middleware/metrics_auth';
 import { rateLimitMiddleware } from './middleware/rate_limit';
 import { policyMiddleware } from './middleware/policy';
 import { spendBudgetMiddleware, releaseReservedBudget, getDailySpend } from './middleware/spend_budget';
@@ -74,13 +75,13 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 // Prometheus-format telemetry endpoint (real exposition format, not JSON)
-app.get('/metrics', (req: Request, res: Response) => {
+app.get('/metrics', metricsAuthMiddleware, (req: Request, res: Response) => {
   res.set('Content-Type', 'text/plain; version=0.0.4');
   res.send(telemetry.getPrometheusText());
 });
 
 // JSON telemetry, for dashboards/tooling that would rather not parse Prometheus text
-app.get('/metrics.json', (req: Request, res: Response) => {
+app.get('/metrics.json', metricsAuthMiddleware, (req: Request, res: Response) => {
   const globalLimitStroops = config.globalDailyBudgetStroops;
   const now = new Date();
   const nextUtcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
