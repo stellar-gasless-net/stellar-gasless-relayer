@@ -88,7 +88,7 @@ src/
 
 ### Step 1: Find an Issue
 Check out open issues on [GitHub Issues](https://github.com/stellar-gasless-net/stellar-gasless-relayer/issues). Pick tasks tagged with:
-- `good first issue`: API enhancements, log improvements, environment variables.
+- [`good first issue`](https://github.com/stellar-gasless-net/stellar-gasless-relayer/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22): API enhancements, log improvements, environment variables.
 - `intermediate`: Relayer keypair pool queue, webhook callbacks, telemetry exporters.
 - `advanced`: Multi-keypair sequence lock management, gas estimation algorithms, load testing.
 
