@@ -13,8 +13,18 @@ import { loadConfig } from '../config';
 export interface SponsorPolicy {
   /** 0 means unlimited. */
   dailyBudgetStroops: number;
-  /** 0 means unlimited. */
+
+  /**
+   * Maximum sponsored transactions per unverified user address per day.
+   * 0 means unlimited. This cap is enforced per Stellar source address,
+   * not per real-world identity, so it is not sybil-resistant on its own:
+   * an attacker can use multiple addresses to obtain separate quotas.
+   * Integrators needing identity-based abuse resistance should use
+   * maxSponsoredTxPerVerifiedUserPerDay with verified zkident credentials.
+   */
   maxSponsoredTxPerUserPerDay: number;
+
+
   /** undefined/empty means "no restriction" — any contract may be invoked. */
   allowedContractIds?: string[];
   /** Cap for a user who genuinely holds a verified stellar-zkident credential (see
