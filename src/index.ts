@@ -123,7 +123,10 @@ app.post('/v1/relay', apiKeyMiddleware, rateLimitMiddleware, policyMiddleware, s
     if (!innerTransactionXdr) {
       releaseReservedBudget(apiKey);
       releasePolicyReservation(res);
-      return res.status(400).json({ error: 'Missing innerTransactionXdr payload' });
+      return res.status(400).json({
+        success: false,
+        error: 'Missing innerTransactionXdr payload',
+      });
     }
 
     // Pre-flight simulation: reject failing invocations before we spend anything sponsoring them.
