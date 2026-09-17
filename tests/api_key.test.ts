@@ -71,4 +71,21 @@ describe('apiKeyMiddleware', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
   });
+
+  it('correctly validates keys of different lengths without byte length mismatch errors', async () => {
+    const middleware = await freshMiddleware('short,a-very-long-secret-api-key-that-spans-many-bytes');
+    const next1 = vi.fn() as NextFunction;
+    middleware(makeReq({ headerKey: 'short' }), makeRes(), next1);
+    expect(next1).toHaveBeenCalledTimes(1);
+
+    const next2 = vi.fn() as NextFunction;
+    middleware(makeReq({ headerKey: 'a-very-long-secret-api-key-that-spans-many-bytes' }), makeRes(), next2);
+    expect(next2).toHaveBeenCalledTimes(1);
+
+    const res = makeRes();
+    const nextFail = vi.fn() as NextFunction;
+    middleware(makeReq({ headerKey: 'mismatched-length-attempt' }), res, nextFail);
+    expect(nextFail).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
 });
